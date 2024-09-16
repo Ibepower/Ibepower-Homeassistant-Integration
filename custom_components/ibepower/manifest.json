@@ -1,0 +1,16 @@
+{
+  "domain": "ibepower",
+  "name": "Ibepower Technologies S.L.",
+  "version": "1.0.0",
+  "documentation": "https://github.com/Ibepower/Ibepower-Homeassistant-Integration-HACS",
+  "requirements": [],
+  "dependencies": [],
+  "codeowners": ["@Ibepower"],
+  "issue_tracker": "https://github.com/Ibepower/Ibepower-Homeassistant-Integration-HACS/issues",
+  "config_flow": true,
+  "iot_class": "local_polling",
+  "zeroconf": ["_ibeplug._tcp.local."],
+  "logo": "/logo.png",
+  "icon": "/icon.png",
+  "homeassistant": "2023.1.0"
+}
