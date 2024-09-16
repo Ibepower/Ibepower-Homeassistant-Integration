@@ -25,7 +25,7 @@
    Clone the repository or download the ZIP file:
 
    ```bash
-   git clone https://github.com/ibepower/ibepower-homeassistant-integration.git
+   git clone https://github.com/Ibepower/Ibepower-Homeassistant-Integration-HACS.git
    ```
 
 2. **Copy files to Home Assistant:**
