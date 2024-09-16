@@ -28,7 +28,7 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required("host"): str,
                     vol.Required("device_type"): vol.In(["ibeplug"]),
-										# vol.Required("device_type"): vol.In(["ibeplug", "ibediv", "ibemeter"]),
+					# vol.Required("device_type"): vol.In(["ibeplug", "ibediv", "ibemeter"]),
                     vol.Optional("name", default=""): str,
                 }
             ),

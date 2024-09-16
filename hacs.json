@@ -1,0 +1,10 @@
+{
+    "name": "Ibepower Home Assistant Integration",
+    "content_in_root": false,
+    "domains": ["ibepower"],
+    "country": "ES",
+    "homeassistant": "2023.1.0",
+    "render_readme": true,
+    "zip_release": false
+  }
+  
