@@ -1,0 +1,14 @@
+{
+  "domain": "ibepower",
+  "name": "Ibepower Technologies S.L.",
+  "version": "1.0.0",
+  "documentation": "https://ibepower.com/tienda",
+  "requirements": [],
+  "dependencies": [],
+  "codeowners": [],
+  "config_flow": true,
+  "iot_class": "local_polling",
+  "zeroconf": ["_ibeplug._tcp.local."],
+  "logo": "/logo.png",
+  "icon": "/icon.png"
+}
