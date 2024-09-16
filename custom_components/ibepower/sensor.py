@@ -18,13 +18,13 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     if device_type == "ibeplug":
         entities.extend([
-            IBEPlugVoltageSensor(coordinator, device),
-            IBEPlugConsumptionSensor(coordinator, device),
             IBEPlugPowerSensor(coordinator, device),
-            IBEPlugKwTotalSensor(coordinator, device),
-            IBEPlugKwYesterdaySensor(coordinator, device),
-            IBEPlugFactorSensor(coordinator, device),
+            IBEPlugVoltageSensor(coordinator, device),
             IBEPlugCurrentSensor(coordinator, device),
+            IBEPlugTodaySensor(coordinator, device),
+            IBEPlugKwYesterdaySensor(coordinator, device),
+            IBEPlugKwTotalSensor(coordinator, device),            
+            IBEPlugFactorSensor(coordinator, device),
         ])
     #elif device_type == "ibediv":
 
@@ -79,7 +79,7 @@ class IBEPlugVoltageSensor(IBEPlugSensor):
     def state(self):
         return self._device.voltage
 
-class IBEPlugConsumptionSensor(IBEPlugSensor):
+class IBEPlugTodaySensor(IBEPlugSensor):
 
     def __init__(self, coordinator, device):
         name = f"{device.name} KwToday"
