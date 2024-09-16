@@ -2,7 +2,7 @@
 # Ibepower Home Assistant Integration
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ibepower/Ibepower-Homeassistant-Integration-HACS/main/images/Ibepower.png">
+  <img src="/images/Ibepower.png">
 </p>
 
 ### A custom integration to control and monitor **Ibepower** smart devices in [Home Assistant](https://www.home-assistant.io/). This integration supports multiple device types, including **Ibeplug**, and allows you to control relays, monitor power consumption, and get real-time energy data.
@@ -132,16 +132,16 @@ For any issues or questions, feel free to open an issue in the GitHub repository
 ## Screenshots
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ibepower/Ibepower-Homeassistant-Integration-HACS/main/images/HACS%20Card.png">
+  <img src="/images/HACS%20Card.png">
 </p>
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ibepower/Ibepower-Homeassistant-Integration-HACS/main/images/HACS%20Integration%20List.png">
+  <img src="/images/HACS%20Integration%20List.png">
 </p>
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ibepower/Ibepower-Homeassistant-Integration-HACS/main/images/HACS%20Integration%20Devices.png">
+  <img src="/images/HACS%20Integration%20Devices.png">
 </p>
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ibepower/Ibepower-Homeassistant-Integration-HACS/main/images/HACS%20Ibeplug%20Info.png">
+  <img src="/images/HACS%20Ibeplug%20Info.png">
 </p>
 
 ---
