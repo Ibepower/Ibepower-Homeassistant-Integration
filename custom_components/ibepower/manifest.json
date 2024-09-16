@@ -1,13 +1,13 @@
 {
-  "domain": "ibepower",
-  "name": "Ibepower Technologies S.L.",
-  "version": "1.0.0",
-  "documentation": "https://github.com/Ibepower/Ibepower-Homeassistant-Integration-HACS",
-  "requirements": [],
-  "dependencies": [],
   "codeowners": ["@Ibepower"],
-  "issue_tracker": "https://github.com/Ibepower/Ibepower-Homeassistant-Integration-HACS/issues",
   "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/Ibepower/Ibepower-Homeassistant-Integration-HACS",
+  "domain": "ibepower",
   "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/Ibepower/Ibepower-Homeassistant-Integration-HACS/issues",
+  "name": "Ibepower Technologies S.L.",
+  "requirements": [],
+  "version": "1.0.0",
   "zeroconf": ["_ibeplug._tcp.local."]
 }
