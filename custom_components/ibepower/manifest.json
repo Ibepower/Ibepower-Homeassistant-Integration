@@ -4,9 +4,9 @@
   "codeowners": ["@Ibepower"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/Ibepower/Ibepower-Homeassistant-Integration-HACS",
+  "documentation": "https://github.com/Ibepower/Ibepower-Homeassistant-Integration",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/Ibepower/Ibepower-Homeassistant-Integration-HACS/issues",
+  "issue_tracker": "https://github.com/Ibepower/Ibepower-Homeassistant-Integration/issues",
   "requirements": [],
   "version": "1.0.0",
   "zeroconf": ["_ibeplug._tcp.local."]

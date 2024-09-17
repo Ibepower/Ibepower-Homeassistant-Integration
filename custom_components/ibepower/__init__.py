@@ -16,10 +16,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     name = entry.data["name"]
     mac = entry.data.get("mac")
     version = entry.data.get("version", "1.0")
+    description = entry.data.get("description", "Unknown")
     device_type = entry.data["device_type"]
 
     if device_type == "ibeplug":
-        device = IBEPlugDevice(host, name, mac, version)
+        device = IBEPlugDevice(host, name, mac, version, description)
     #elif device_type == "ibediv":
         # device = IBEDivDevice(host, name, mac, version)
     else:
@@ -33,6 +34,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         update_method=device.async_update_data,
         update_interval=timedelta(seconds=10),
     )
+
+    _LOGGER.debug("Device Name: %s, Device Mac: %s, Device Version: %s, Device Description: %s, Device Type: %s", device.name, device.mac, device.version, device.description, device_type)
 
     await coordinator.async_config_entry_first_refresh()
 

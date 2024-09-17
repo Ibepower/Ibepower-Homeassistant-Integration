@@ -1,6 +1,7 @@
 import logging
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -14,7 +15,13 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     entities = []
 
     if device_type == "ibeplug":
-        entities.append(IBEPlugSwitch(coordinator, device))
+        switch_entity = IBEPlugSwitch(coordinator, device)
+        entities.append(switch_entity)
+
+        if DOMAIN not in hass.data:
+            hass.data[DOMAIN] = {}
+
+        hass.data[DOMAIN][switch_entity.unique_id] = switch_entity
     # elif device_type == "ibediv":
 
     async_add_entities(entities)
@@ -24,6 +31,7 @@ class IBEPlugSwitch(CoordinatorEntity, SwitchEntity):
     def __init__(self, coordinator, device):
         super().__init__(coordinator)
         self._device = device
+        _LOGGER.debug("Switch Name: %s, Switch Unique ID: %s", self._device.name, self.unique_id)
 
     @property
     def name(self):
@@ -50,6 +58,13 @@ class IBEPlugSwitch(CoordinatorEntity, SwitchEntity):
             "model": "Ibeplug",
             "sw_version": self._device.version,
         }
+    
+    def update_name(self):
+        self._device.name = self._generate_name()
+        self.async_write_ha_state()
+
+    def _generate_name(self):
+        return f"Ibeplug ({self._device.description})"
 
     async def async_turn_on(self):
         response = await self._device.async_turn_on()

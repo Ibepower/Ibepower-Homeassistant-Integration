@@ -4,11 +4,12 @@ import logging
 _LOGGER = logging.getLogger(__name__)
 
 class IBEPlugDevice:
-    def __init__(self, host, name, mac, version):
+    def __init__(self, host, name, mac, version, description):
         self._host = host
         self._name = name
         self._mac = mac
         self._version = version
+        self._description = description
         self._port = 80
         self.is_on = False
         self.voltage = None
@@ -30,6 +31,18 @@ class IBEPlugDevice:
     @property
     def version(self):
         return self._version
+    
+    @property
+    def description(self):
+        return self._description
+
+    @description.setter
+    def description(self, value):
+        self._description = value
+    
+    @name.setter
+    def name(self, value):
+        self._name = value
 
     async def async_update_data(self):
         url = f"http://{self._host}:{self._port}/cm?cmnd=Energy"
