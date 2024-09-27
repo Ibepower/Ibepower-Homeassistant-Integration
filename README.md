@@ -20,6 +20,24 @@
 
 ## Installation
 
+### HACS Installation
+
+1. **Add Custom Repository:**
+
+   - Open HACS in Home Assistant.
+   - Go to **Integrations**.
+   - Click on the three dots in the top right corner and select **Custom repositories**.
+   - Add the repository URL: `https://github.com/Ibepower/Ibepower-Homeassistant-Integration` and select the category **Integration**.
+
+2. **Install the Integration:**
+
+   - Search for **Ibepower Home Assistant Integration** in HACS.
+   - Click on **Install** and wait for the installation to complete.
+
+3. **Restart Home Assistant:**
+
+ - After the installation, restart Home Assistant to load the new integration.
+
 ### Manual Installation
 
 1. **Download the integration:**
@@ -40,12 +58,15 @@
      └── custom_components
          └── ibepower
              ├── __init__.py
-             ├── const.py
-             ├── sensor.py
-             ├── switch.py
              ├── config_flow.py
+             ├── const.py
+             ├── ibediv_device.py
              ├── ibeplug_device.py
-             └── manifest.json
+             ├── manifest.json
+             ├── number.py
+             ├── select.py
+             ├── sensor.py
+             └── switch.py
      ```
 
 3. **Restart Home Assistant:**
