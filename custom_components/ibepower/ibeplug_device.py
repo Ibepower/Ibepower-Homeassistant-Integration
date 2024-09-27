@@ -43,6 +43,12 @@ class IBEPlugDevice:
     @name.setter
     def name(self, value):
         self._name = value
+    
+    @property
+    def extra_state_attributes(self):
+        return {
+            "visit_url": f"http://{self._device._host}:{self._device._port}",
+        }
 
     async def async_update_data(self):
         url = f"http://{self._host}:{self._port}/cm?cmnd=Energy"

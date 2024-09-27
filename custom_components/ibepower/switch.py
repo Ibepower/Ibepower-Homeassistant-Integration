@@ -18,20 +18,35 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         switch_entity = IBEPlugSwitch(coordinator, device)
         entities.append(switch_entity)
 
+        _LOGGER.debug("[SWITCH] Switch Name: %s, Switch Unique ID: %s", switch_entity.name, switch_entity.unique_id)
+
         if DOMAIN not in hass.data:
             hass.data[DOMAIN] = {}
 
         hass.data[DOMAIN][switch_entity.unique_id] = switch_entity
-    # elif device_type == "ibediv":
+
+    elif device_type == "ibediv":
+        div_entity = IBEDivSwitchOnOff(coordinator, device)
+        entities.append(div_entity)
+
+        _LOGGER.debug("[SWITCH] Switch Name: %s, Switch Unique ID: %s", div_entity.name, div_entity.unique_id)
+
+        if DOMAIN not in hass.data:
+            hass.data[DOMAIN] = {}
+
+        hass.data[DOMAIN][div_entity.unique_id] = div_entity
 
     async_add_entities(entities)
+
+####################################################################################################
+################################## Ibeplug Switch Entity ###########################################
+####################################################################################################
 
 class IBEPlugSwitch(CoordinatorEntity, SwitchEntity):
 
     def __init__(self, coordinator, device):
         super().__init__(coordinator)
         self._device = device
-        _LOGGER.debug("Switch Name: %s, Switch Unique ID: %s", self._device.name, self.unique_id)
 
     @property
     def name(self):
@@ -57,6 +72,8 @@ class IBEPlugSwitch(CoordinatorEntity, SwitchEntity):
             "manufacturer": "Ibepower Technologies S.L.",
             "model": "Ibeplug",
             "sw_version": self._device.version,
+            "connections": {("mac", self._device.mac)},
+            "configuration_url": f"http://{self._device._host}:{self._device._port}",
         }
     
     def update_name(self):
@@ -81,5 +98,68 @@ class IBEPlugSwitch(CoordinatorEntity, SwitchEntity):
             self._device.is_on = False
         else:
             self._device.is_on = True
+
+        self.async_write_ha_state()
+
+####################################################################################################
+################################### Ibediv Switch Entity ###########################################
+####################################################################################################
+
+class IBEDivSwitchOnOff(CoordinatorEntity, SwitchEntity):
+
+    def __init__(self, coordinator, device):
+        super().__init__(coordinator)
+        self._device = device
+
+    @property
+    def name(self):
+        return self._device.name
+    
+    @property
+    def unique_id(self):
+        return f"{self._device.mac}_switch_on_off"
+
+    @property
+    def is_on(self):
+        return self._device.diverter_is_on
+    
+    @property
+    def icon(self):
+        return "mdi:power-standby"
+    
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self._device.mac)},
+            "name": self._device.name,
+            "manufacturer": "Ibepower Technologies S.L.",
+            "model": "Ibediv",
+            "sw_version": self._device.version,
+            "connections": {("mac", self._device.mac)},
+            "configuration_url": f"http://{self._device._host}:{self._device._port}",
+        }
+    
+    def update_name(self):
+        self._device.name = self._generate_name()
+        self.async_write_ha_state()
+
+    def _generate_name(self):
+        return f"Ibediv ({self._device.description})"
+
+    async def async_turn_on(self):
+        response = await self._device.async_turn_on_diverter()
+        if response and response.get("pwm") == "ON":
+            self._device.diverter_is_on = True
+        else:
+            self._device.diverter_is_on = False
+
+        self.async_write_ha_state()
+
+    async def async_turn_off(self):
+        response = await self._device.async_turn_off_diverter()
+        if response and response.get("pwm") == "OFF":
+            self._device.diverter_is_on = False
+        else:
+            self._device.diverter_is_on = True
 
         self.async_write_ha_state()

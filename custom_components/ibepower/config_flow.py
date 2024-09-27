@@ -22,7 +22,7 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             device_type = user_input["device_type"]
             unique_id = f"{device_type}_{host}"
             
-            _LOGGER.debug("Host: %s, Name: %s, Device Type: %s, Unique ID: %s", host, name, device_type, unique_id)
+            _LOGGER.debug("[Step User] Host: %s, Name: %s, Device Type: %s, Unique ID: %s", host, name, device_type, unique_id)
             
             await self.async_set_unique_id(unique_id)
 
@@ -35,7 +35,7 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required("host"): str,
-                    vol.Required("device_type"): vol.In(["ibeplug"]),
+                    vol.Required("device_type"): vol.In(["ibeplug", "ibediv"]),
 					# vol.Required("device_type"): vol.In(["ibeplug", "ibediv", "ibemeter"]),
                     vol.Optional("name", default=""): str,
                 }
@@ -48,8 +48,8 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if discovery_info.type == "_ibeplug._tcp.local.":
             device_type = "ibeplug"
-        #elif discovery_info.type == "_ibediv._tcp.local.":
-        #    device_type = "ibediv"
+        elif discovery_info.type == "_ibediv._tcp.local.":
+            device_type = "ibediv"
         else:
             _LOGGER.debug("Dispositivo ignorado, tipo de servicio no reconocido.")
             return self.async_abort(reason="not_ibepower_device")
@@ -58,8 +58,8 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         host = discovery_info.host
         desc = properties.get("desc", "Unknown")
         version = properties.get("version", "1.0")
-
         mac = properties.get("mac")
+
         if mac is None:
             _LOGGER.debug("Dispositivo sin dirección MAC, ignorado.")
             return self.async_abort(reason="no_mac_address")
@@ -67,16 +67,14 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         name = f"{device_type.capitalize()} ({desc})"
         unique_id = f"{device_type}_{mac}"
         
-        _LOGGER.debug("Dispositivo encontrado: %s (%s) en %s", name, mac, host)
+        _LOGGER.debug("[ZEROCONF] Dispositivo encontrado: %s (%s) en %s - unique_id: %s", name, version, host, unique_id)
 
         # Comprueba si el dispositivo ya está configurado
         existing_entry = await self.async_set_unique_id(unique_id)
         if existing_entry:
-            # Comprueba si la descripción del dispositivo ha cambiado
             old_desc = existing_entry.data.get("description")
             if old_desc != desc:
                 _LOGGER.debug(f"Detectado cambio en la descripción del dispositivo: {old_desc} -> {desc}")
-                # Actualiza la descripción del dispositivo
                 self.hass.config_entries.async_update_entry(
                     existing_entry,
                     title = name,
@@ -89,7 +87,6 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 await self.hass.config_entries.async_reload(existing_entry.entry_id)
 
-                # Actualiza la descripción en el diccionario y en las entidades asociadas
                 device_info = self.hass.data[DOMAIN].get(existing_entry.entry_id)
                 _LOGGER.debug(f"device_info: {device_info}")
                 if device_info and 'device' in device_info:
@@ -114,7 +111,7 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             return self.async_abort(reason="device_already_configured")
 
-        _LOGGER.debug("Creando nuevo dispositivo %s", name)
+        _LOGGER.debug("[ZEROCONF] Creando nuevo dispositivo %s", name)
         return self.async_create_entry(
             title = name,
             data={
