@@ -9,7 +9,7 @@ from .ibediv_device import IBEDivDevice
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["switch", "sensor", "select", "number"]
+PLATFORMS = ["switch", "sensor", "select", "number", "button"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     host = entry.data["host"]
@@ -19,10 +19,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     description = entry.data.get("description", "Unknown")
     device_type = entry.data["device_type"]
 
-    if device_type == "ibeplug":
-        device = IBEPlugDevice(host, name, mac, version, description)
-    elif device_type == "ibediv":
-        device = IBEDivDevice(host, name, mac, version, description)
+    if device_type == "Ibeplug":
+        device = IBEPlugDevice(hass, host, name, mac, version, description)
+    elif device_type == "Ibediv":
+        device = IBEDivDevice(hass, host, name, mac, version, description)
     else:
         _LOGGER.error("Tipo de dispositivo desconocido: %s", device_type)
         return False

@@ -35,8 +35,8 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required("host"): str,
-                    vol.Required("device_type"): vol.In(["ibeplug", "ibediv"]),
-					# vol.Required("device_type"): vol.In(["ibeplug", "ibediv", "ibemeter"]),
+                    vol.Required("device_type"): vol.In(["Ibeplug", "Ibediv"]),
+					# vol.Required("device_type"): vol.In(["Ibeplug", "Ibediv", "Ibemeter"]),
                     vol.Optional("name", default=""): str,
                 }
             ),
@@ -47,9 +47,9 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         _LOGGER.debug("Dispositivo descubierto via mDNS: %s", discovery_info)
 
         if discovery_info.type == "_ibeplug._tcp.local.":
-            device_type = "ibeplug"
+            device_type = "Ibeplug"
         elif discovery_info.type == "_ibediv._tcp.local.":
-            device_type = "ibediv"
+            device_type = "Ibediv"
         else:
             _LOGGER.debug("Dispositivo ignorado, tipo de servicio no reconocido.")
             return self.async_abort(reason="not_ibepower_device")
@@ -72,9 +72,27 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Comprueba si el dispositivo ya está configurado
         existing_entry = await self.async_set_unique_id(unique_id)
         if existing_entry:
+            old_host = existing_entry.data.get("host")
+            old_version = existing_entry.data.get("version")
             old_desc = existing_entry.data.get("description")
+
+            any_change = False
+
+            if old_host != host:
+                _LOGGER.debug(f"Detectado cambio en el host del dispositivo: {old_host} -> {host}")
+                any_change = True
+
+            # Comprobar si la versión ha cambiado
+            if old_version != version:
+                _LOGGER.debug(f"Detectado cambio en la versión del dispositivo: {old_version} -> {version}")
+                any_change = True
+
+            # Comprobar si la descripción ha cambiado
             if old_desc != desc:
                 _LOGGER.debug(f"Detectado cambio en la descripción del dispositivo: {old_desc} -> {desc}")
+                any_change = True
+
+            if any_change:
                 self.hass.config_entries.async_update_entry(
                     existing_entry,
                     title = name,
@@ -82,6 +100,8 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         **existing_entry.data,
                         "description": desc,
                         "name": name,
+                        "version": version,
+                        "host": host,
                     }
                 )
 
@@ -93,8 +113,9 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     device = device_info['device']
                     device.description = desc
                     device.name = name
-                    _LOGGER.debug(f"Descripción del dispositivo actualizada a {device.description}")
-                    _LOGGER.debug(f"Nombre del dispositivo actualizado a {device.name}")
+                    device.version = version
+                    device.host = host
+                    _LOGGER.debug(f"Actualizando valores del dispositivo: {device.name}")
 
                 entity_registry = async_get(self.hass)
                 for entity in entity_registry.entities.values():

@@ -13,7 +13,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     entities = []
 
-    if device_type == "ibediv":
+    if device_type == "Ibediv":
 
         div_manual_slider = IBEDivManualSlider(coordinator, device)
         

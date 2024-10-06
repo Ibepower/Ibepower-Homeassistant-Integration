@@ -16,7 +16,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
 
-    if device_type == "ibeplug":
+    if device_type == "Ibeplug":
 
         sensor_definitions_ibeplug = {
             "voltage": {"name": "Voltage", "unit": "V", "icon": "mdi:flash", "field": "voltage"},
@@ -44,7 +44,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
             hass.data[DOMAIN][sensor_ibeplug_entity.unique_id] = sensor_ibeplug_entity
 
-    elif device_type == "ibediv":
+    elif device_type == "Ibediv":
         _LOGGER.debug("Ibediv Device Type: %s", device_type)
 
         sensor_definitions_ibediv = {

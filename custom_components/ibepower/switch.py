@@ -14,7 +14,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     entities = []
 
-    if device_type == "ibeplug":
+    if device_type == "Ibeplug":
         switch_entity = IBEPlugSwitch(coordinator, device)
         entities.append(switch_entity)
 
@@ -25,7 +25,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
         hass.data[DOMAIN][switch_entity.unique_id] = switch_entity
 
-    elif device_type == "ibediv":
+    elif device_type == "Ibediv":
         div_entity = IBEDivSwitchOnOff(coordinator, device)
         entities.append(div_entity)
 
