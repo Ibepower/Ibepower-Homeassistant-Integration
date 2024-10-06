@@ -8,6 +8,6 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/Ibepower/Ibepower-Homeassistant-Integration/issues",
   "requirements": [],
-  "version": "1.2.2",
+  "version": "1.2.1",
   "zeroconf": ["_ibeplug._tcp.local.", "_ibediv._tcp.local."]
 }
