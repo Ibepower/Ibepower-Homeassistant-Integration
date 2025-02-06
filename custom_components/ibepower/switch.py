@@ -43,7 +43,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 ####################################################################################################
 
 class IBEPlugSwitch(CoordinatorEntity, SwitchEntity):
-
     def __init__(self, coordinator, device):
         super().__init__(coordinator)
         self._device = device
@@ -125,7 +124,10 @@ class IBEDivSwitchOnOff(CoordinatorEntity, SwitchEntity):
     
     @property
     def icon(self):
-        return "mdi:power-standby"
+        if self._device.diverter_is_on:
+            return "mdi:power-cycle"
+        else:
+            return "mdi:power"
     
     @property
     def device_info(self):

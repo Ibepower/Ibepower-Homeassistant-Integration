@@ -62,10 +62,15 @@ class IBEDivSelect(CoordinatorEntity, SelectEntity):
         return self.get_current_option()
     
     def get_current_option(self):
-        if self._device.work_mode == "MAN":
-            return "MANUAL"
+        work_mode = self._device.work_mode
+        _LOGGER.debug("get_current_option called. Device work_mode: %s", work_mode)
+        if work_mode == "MAN":
+            current_option = "MANUAL"
         else:
-            return "AUTO"
+            current_option = "AUTO"
+        _LOGGER.debug("get_current_option returning: %s", current_option)
+        return current_option
+
     
     @property
     def device_info(self):
@@ -84,12 +89,16 @@ class IBEDivSelect(CoordinatorEntity, SelectEntity):
         self.async_write_ha_state()
 
     def _generate_name(self):
-        # return f"Modo de trabajo ({self._device.description})"
-        return "Modo de trabajo"
+        return f"Modo de trabajo ({self._device.description})"
+        #return "Modo de trabajo"
     
     async def async_select_option(self, option: str):
+        _LOGGER.debug("async_select_option called with option: %s", option)
         if option in self._attr_options:
-            
             await self._device.async_select_work_mode(option)
-            
+            _LOGGER.debug("Option %s sent to device", option)
             self.async_write_ha_state()
+        else:
+            _LOGGER.error(
+                "Invalid option selected: %s (valid options: %s)", option, self._attr_options
+        )

@@ -1,6 +1,7 @@
 import logging
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.components.number import NumberEntity
+
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -42,10 +43,6 @@ class IBEDivManualSlider(CoordinatorEntity, NumberEntity):
         self._attr_native_step = 1
         self._attr_native_unit_of_measurement = "%"
         self._attr_native_value = self._device.manualControlPercentage
-
-    @property
-    def label(self) -> str:
-        return "prueba etiqueta"
     
     @property
     def name(self):
@@ -85,5 +82,4 @@ class IBEDivManualSlider(CoordinatorEntity, NumberEntity):
         self.async_write_ha_state()
 
     def _generate_name(self):
-        # return f"{self._name} ({self._device.description})"
-        return "Manual (%)"
+        return f"Manual (%) ({self._device.description})"
