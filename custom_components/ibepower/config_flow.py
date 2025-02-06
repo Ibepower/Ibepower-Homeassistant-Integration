@@ -15,33 +15,7 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
-        errors = {}
-        if user_input is not None:
-            host = user_input["host"]
-            name = user_input["name"]
-            device_type = user_input["device_type"]
-            unique_id = f"{device_type}_{host}"
-            
-            _LOGGER.debug("[Step User] Host: %s, Name: %s, Device Type: %s, Unique ID: %s", host, name, device_type, unique_id)
-            
-            await self.async_set_unique_id(unique_id)
-
-            self._abort_if_unique_id_configured()
-            
-            return self.async_create_entry(title=name, data=user_input)
-
-        return self.async_show_form(
-            step_id="user",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("host"): str,
-                    vol.Required("device_type"): vol.In(["Ibeplug", "Ibediv"]),
-					# vol.Required("device_type"): vol.In(["Ibeplug", "Ibediv", "Ibemeter"]),
-                    vol.Optional("name", default=""): str,
-                }
-            ),
-            errors=errors,
-        )
+        return self.async_abort(reason="Ibepower Integration is configured via Zeroconf. Please, close this dialog and wait for the device to be discovered.")
 
     async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo):
         _LOGGER.debug("Dispositivo descubierto via mDNS: %s", discovery_info)
