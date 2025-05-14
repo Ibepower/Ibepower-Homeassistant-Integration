@@ -6,6 +6,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from .const import DOMAIN
 from .ibeplug_device import IBEPlugDevice
 from .ibediv_device import IBEDivDevice
+from .ibemeter_device import IBEMeterDevice
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,6 +24,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         device = IBEPlugDevice(hass, host, name, mac, version, description)
     elif device_type == "Ibediv":
         device = IBEDivDevice(hass, host, name, mac, version, description)
+    elif device_type == "Ibemeter":
+        device = IBEMeterDevice(hass, host, name, mac, version, description)
     else:
         _LOGGER.error("Tipo de dispositivo desconocido: %s", device_type)
         return False

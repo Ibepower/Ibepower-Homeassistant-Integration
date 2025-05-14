@@ -1,6 +1,9 @@
 import logging
+from datetime import datetime
+import re
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.entity import EntityCategory
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -42,7 +45,12 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
             entities.append(sensor_ibeplug_entity)
 
-            _LOGGER.debug("[SENSOR] Sensor Name: %s, Sensor Unique_ID: %s, Sensor Unit: %s, Sensor Icon: %s, Sensor Field: %s", sensor_ibeplug_entity.name, sensor_ibeplug_entity.unique_id, sensor_ibeplug_entity.native_unit_of_measurement, sensor_ibeplug_entity.icon, sensor_info["field"])
+            _LOGGER.debug("[SENSOR] Sensor Name: %s, Sensor Unique_ID: %s, Sensor Unit: %s, Sensor Icon: %s, Sensor Field: %s",
+                            sensor_ibeplug_entity.name,
+                            sensor_ibeplug_entity.unique_id,
+                            sensor_ibeplug_entity.native_unit_of_measurement,
+                            sensor_ibeplug_entity.icon,
+                            sensor_info["field"])
 
             hass.data[DOMAIN][sensor_ibeplug_entity.unique_id] = sensor_ibeplug_entity
 
@@ -59,13 +67,15 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             "wMN": {"name": "Work Mode Name", "unit": None, "icon": "mdi:information", "field": "work_mode_name", "visible": False, "device_class": None, "state_class": None},
             "mMN": {"name": "Master Mode Name", "unit": None, "icon": "mdi:account-supervisor", "field": "master_mode_name", "visible": False, "device_class": None, "state_class": None},
             "tSD": {"name": "Temperature Shutdown", "unit": None, "icon": "mdi:thermometer-alert", "field": "temp_shutdown", "visible": False, "device_class": "temperature", "state_class": "measurement"},
-            "uPT": {"name": "Uptime", "unit": None, "icon": "mdi:timer", "field": "uptime", "visible": False, "device_class": "duration", "state_class": "measurement"},
             "cT": {"name": "Chip Temperature", "unit": "°C", "icon": "mdi:thermometer", "field": "chip_temperature", "visible": False, "device_class": "temperature", "state_class": "measurement"},
+            "lRST": {"name": "Last Restart Time", "unit": None, "icon": "mdi:restart", "field": "last_restart", "visible": True, "device_class": "timestamp", "state_class": None, "entity_category": EntityCategory.DIAGNOSTIC},
 
             # Energía solar, red, batería
             "sW": {"name": "Solar Watts", "unit": "W", "icon": "mdi:solar-power-variant-outline", "field": "solar_watts", "visible": True, "device_class": "power", "state_class": "measurement"},
             "gW": {"name": "Grid Watts", "unit": "W", "icon": "mdi:transmission-tower", "field": "grid_watts", "visible": True, "device_class": "power", "state_class": "measurement"},
             "gV": {"name": "Grid Voltage", "unit": "V", "icon": "mdi:sine-wave", "field": "grid_voltage", "visible": True, "device_class": "voltage", "state_class": "measurement"},
+            "gC": {"name": "Grid Current", "unit": "A", "icon": "mdi:current-ac", "field": "grid_current", "visible": True, "device_class": "current", "state_class": "measurement"},
+            "gF": {"name": "Grid Frequency", "unit": "Hz", "icon": "mdi:transmission-tower", "field": "grid_frequency", "visible": True, "device_class": "frequency", "state_class": "measurement"},
             "bV": {"name": "Battery Voltage", "unit": "V", "icon": "mdi:battery", "field": "battery_voltage", "visible": True, "device_class": "voltage", "state_class": "measurement"},
             "bA": {"name": "Battery Current", "unit": "A", "icon": "mdi:current-dc", "field": "battery_current", "visible": True, "device_class": "current", "state_class": "measurement"},
             "bW": {"name": "Battery Power", "unit": "W", "icon": "mdi:battery-charging", "field": "battery_power", "visible": True, "device_class": "power", "state_class": "measurement"},
@@ -131,21 +141,103 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 sensor_ibediv_entity = IBEDivSensor(
                         coordinator=coordinator,
                         device = device,
-                        name = sensor_info["name"],
-                        unit = sensor_info["unit"],
-                        icon = sensor_info["icon"],
+                        name=sensor_info.get("name", None),
+                        unit=sensor_info.get("unit", None),
+                        icon=sensor_info.get("icon", None),
                         unique_id = f"{device.mac}_{sensor_info['field']}",
-                        field = sensor_info["field"],
-                        visible = sensor_info["visible"],
-                        device_class = sensor_info["device_class"],
-                        state_class = sensor_info["state_class"]
+                        field=sensor_info.get("field", None),
+                        visible=sensor_info.get("visible", None),
+                        device_class=sensor_info.get("device_class", None),
+                        state_class=sensor_info.get("state_class", None),
+                        entity_category=sensor_info.get("entity_category", None)
                     )
                 
                 entities.append(sensor_ibediv_entity)
 
-                _LOGGER.debug("[SENSOR] Sensor Name: %s, Sensor Unique_ID: %s, Sensor Unit: %s, Sensor Icon: %s, Sensor Unique ID: %s, Sensor Field: %s, visible: %s", sensor_ibediv_entity.name, sensor_ibediv_entity.unique_id, sensor_ibediv_entity.native_unit_of_measurement, sensor_info["field"], sensor_info["visible"])
+                _LOGGER.debug("[SENSOR] Sensor Name: %s, Sensor Unique_ID: %s, Sensor Unit: %s, Sensor Icon: %s, Sensor Field: %s, Visible: %s",
+                                sensor_ibediv_entity.name,
+                                sensor_ibediv_entity.unique_id,
+                                sensor_ibediv_entity.native_unit_of_measurement,
+                                sensor_ibediv_entity.icon,
+                                sensor_info["field"],
+                                sensor_info["visible"])
+
 
                 hass.data[DOMAIN][sensor_ibediv_entity.unique_id] = sensor_ibediv_entity
+        
+    elif device_type == "Ibemeter":
+        _LOGGER.debug("Ibemeter Device Type: %s", device_type)
+
+        sensor_definitions_ibemeter = {
+            # Estado del sistema y configuración
+            "Heap": {"name": "Heap Memory", "unit": "bytes", "icon": "mdi:memory", "field": "heap_memory", "visible": False, "device_class": "memory", "state_class": "measurement"},
+            "cT": {"name": "Chip Temperature", "unit": "°C", "icon": "mdi:thermometer", "field": "chip_temperature", "visible": False, "device_class": "temperature", "state_class": "measurement"},
+            "lRST": {"name": "Last Restart Time", "unit": None, "icon": "mdi:restart", "field": "last_restart", "visible": True, "device_class": "timestamp", "state_class": None, "entity_category": EntityCategory.DIAGNOSTIC},
+
+            # Energía solar, red
+            "sW": {"name": "Solar Watts", "unit": "W", "icon": "mdi:solar-power-variant-outline", "field": "solar_watts", "visible": True, "device_class": "power", "state_class": "measurement"},
+            "sC": {"name": "Solar Current", "unit": "A", "icon": "mdi:current-dc", "field": "solar_current", "visible": True, "device_class": "current", "state_class": "measurement"},
+            "gW": {"name": "Grid Watts", "unit": "W", "icon": "mdi:transmission-tower", "field": "grid_watts", "visible": True, "device_class": "power", "state_class": "measurement"},
+            "gV": {"name": "Grid Voltage", "unit": "V", "icon": "mdi:sine-wave", "field": "grid_voltage", "visible": True, "device_class": "voltage", "state_class": "measurement"},
+            "gC": {"name": "Grid Current", "unit": "A", "icon": "mdi:current-ac", "field": "grid_current", "visible": True, "device_class": "current", "state_class": "measurement"},
+            "gF": {"name": "Grid Frequency", "unit": "Hz", "icon": "mdi:transmission-tower", "field": "grid_frequency", "visible": True, "device_class": "frequency", "state_class": "measurement"},
+
+            # Energía importada
+            "KwT": {"name": "Kw Import Today", "unit": "kWh", "icon": "mdi:transmission-tower-import", "field": "kw_import_today", "visible": False, "device_class": "energy", "state_class": "total"},
+            "KwY": {"name": "Kw Import Yesterday", "unit": "kWh", "icon": "mdi:transmission-tower-import", "field": "kw_import_yesterday", "visible": False, "device_class": "energy", "state_class": "total"},
+            "KwM": {"name": "Kw Import Month", "unit": "kWh", "icon": "mdi:transmission-tower-import", "field": "kw_import_month", "visible": False, "device_class": "energy", "state_class": "total"},
+            "KwLM": {"name": "Kw Import Last Month", "unit": "kWh", "icon": "mdi:transmission-tower-import", "field": "kw_import_last_month", "visible": False, "device_class": "energy", "state_class": "total"},
+            "KwYR": {"name": "Kw Import Year", "unit": "kWh", "icon": "mdi:transmission-tower-import", "field": "kw_import_year", "visible": False, "device_class": "energy", "state_class": "total"},
+            "KwLYR": {"name": "Kw Import Last Year", "unit": "kWh", "icon": "mdi:transmission-tower-import", "field": "kw_import_last_year", "visible": False, "device_class": "energy", "state_class": "total"},
+            "KwTT": {"name": "Kw Import Total", "unit": "kWh", "icon": "mdi:transmission-tower-import", "field": "kw_import_total", "visible": False, "device_class": "energy", "state_class": "total"},
+
+            # Energía exportada
+            "KwET": {"name": "Kw Export Today", "unit": "kWh", "icon": "mdi:transmission-tower-export", "field": "kw_export_today", "visible": False, "device_class": "energy", "state_class": "total"},
+            "KwEY": {"name": "Kw Export Yesterday", "unit": "kWh", "icon": "mdi:transmission-tower-export", "field": "kw_export_yesterday", "visible": False, "device_class": "energy", "state_class": "total"},
+            "KwEM": {"name": "Kw Export Month", "unit": "kWh", "icon": "mdi:transmission-tower-export", "field": "kw_export_month", "visible": False, "device_class": "energy", "state_class": "total"},
+            "KwELM": {"name": "Kw Export Last Month", "unit": "kWh", "icon": "mdi:transmission-tower-export", "field": "kw_export_last_month", "visible": False, "device_class": "energy", "state_class": "total"},
+            "KwEYR": {"name": "Kw Export Year", "unit": "kWh", "icon": "mdi:transmission-tower-export", "field": "kw_export_year", "visible": False, "device_class": "energy", "state_class": "total"},
+            "KwELYR": {"name": "Kw Export Last Year", "unit": "kWh", "icon": "mdi:transmission-tower-export", "field": "kw_export_last_year", "visible": False, "device_class": "energy", "state_class": "total"},
+            "KwETT": {"name": "Kw Export Total", "unit": "kWh", "icon": "mdi:transmission-tower-export", "field": "kw_export_total", "visible": False, "device_class": "energy", "state_class": "total"},
+
+            # Energía solar
+            "KwST": {"name": "Kw Solar Today", "unit": "kWh", "icon": "mdi:solar-power", "field": "kw_solar_today", "visible": False, "device_class": "energy", "state_class": "total"},
+            "KwSY": {"name": "Kw Solar Yesterday", "unit": "kWh", "icon": "mdi:solar-power", "field": "kw_solar_yesterday", "visible": False, "device_class": "energy", "state_class": "total"},
+            "KwSM": {"name": "Kw Solar Month", "unit": "kWh", "icon": "mdi:solar-power", "field": "kw_solar_month", "visible": False, "device_class": "energy", "state_class": "total"},
+            "KwSLM": {"name": "Kw Solar Last Month", "unit": "kWh", "icon": "mdi:solar-power", "field": "kw_solar_last_month", "visible": False, "device_class": "energy", "state_class": "total"},
+            "KwSYR": {"name": "Kw Solar Year", "unit": "kWh", "icon": "mdi:solar-power", "field": "kw_solar_year", "visible": False, "device_class": "energy", "state_class": "total"},
+            "KwSLYR": {"name": "Kw Solar Last Year", "unit": "kWh", "icon": "mdi:solar-power", "field": "kw_solar_last_year", "visible": False, "device_class": "energy", "state_class": "total"},
+            "KwSTT": {"name": "Kw Solar Total", "unit": "kWh", "icon": "mdi:solar-power", "field": "kw_solar_total", "visible": False, "device_class": "energy", "state_class": "total"},
+        }
+
+        for field, sensor_info in sensor_definitions_ibemeter.items():
+            if field in device.device_data:
+                sensor_ibemeter_entity = IBEDivSensor(
+                        coordinator=coordinator,
+                        device = device,
+                        name=sensor_info.get("name", None),
+                        unit=sensor_info.get("unit", None),
+                        icon=sensor_info.get("icon", None),
+                        unique_id = f"{device.mac}_{sensor_info['field']}",
+                        field=sensor_info.get("field", None),
+                        visible=sensor_info.get("visible", None),
+                        device_class=sensor_info.get("device_class", None),
+                        state_class=sensor_info.get("state_class", None),
+                        entity_category=sensor_info.get("entity_category", None)
+                    )
+                
+                entities.append(sensor_ibemeter_entity)
+
+                _LOGGER.debug("[SENSOR] Sensor Name: %s, Sensor Unique_ID: %s, Sensor Unit: %s, Sensor Icon: %s, Sensor Field: %s, Visible: %s",
+                                sensor_ibemeter_entity.name,
+                                sensor_ibemeter_entity.unique_id,
+                                sensor_ibemeter_entity.native_unit_of_measurement,
+                                sensor_ibemeter_entity.icon,
+                                sensor_info["field"],
+                                sensor_info["visible"])
+
+
+                hass.data[DOMAIN][sensor_ibemeter_entity.unique_id] = sensor_ibemeter_entity
 
 
     async_add_entities(entities)
@@ -221,9 +313,10 @@ class IBEPlugSensor(CoordinatorEntity, SensorEntity):
 ################################### Ibediv Sensor Entity ###########################################
 ####################################################################################################
 
+
 class IBEDivSensor(CoordinatorEntity, SensorEntity):
 
-    def __init__(self, coordinator, device, name, unit, icon, unique_id, field, visible, device_class, state_class):
+    def __init__(self, coordinator, device, name, unit, icon, unique_id, field, visible, device_class, state_class, entity_category):
         super().__init__(coordinator)
         self._device = device
         self._base_name = name
@@ -236,6 +329,16 @@ class IBEDivSensor(CoordinatorEntity, SensorEntity):
         self._visible = visible
         self._device_class = device_class
         self._state_class = state_class
+        self._entity_category = entity_category
+
+    def process_field_value(field_name, value):
+        if field_name == "last_restart" and value:
+            try:
+                return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError as err:
+                _LOGGER.error("Error al convertir el valor de %s: %s", field_name, err)
+                return None
+        return value
 
     @property
     def name(self):
@@ -262,9 +365,18 @@ class IBEDivSensor(CoordinatorEntity, SensorEntity):
         return self._state_class
 
     @property
+    def entity_category(self):
+        return self._entity_category
+
+    @property
     def native_value(self):
-        return getattr(self._device, self._field, None)
-    
+        raw = getattr(self._device, self._field, None)
+
+        if self._field == "last_restart" and raw:
+            raw = IBEDivSensor.process_field_value(self._field, raw)
+
+        return raw
+
     @property
     def entity_registry_enabled_default(self) -> bool:
         return self._visible
@@ -276,6 +388,97 @@ class IBEDivSensor(CoordinatorEntity, SensorEntity):
             "name": self._device.name,
             "manufacturer": "Ibepower Technologies S.L.",
             "model": "Ibediv",
+            "sw_version": self._device.version,
+            "connections": {("mac", self._device.mac)},
+            "configuration_url": f"http://{self._device._host}:{self._device._port}",
+        }
+    
+    def update_name(self):
+        self._name = self._generate_name()
+        self.async_write_ha_state()
+
+    def _generate_name(self):
+        return f"{self._base_name} ({self._device.description})"
+
+####################################################################################################
+################################### Ibemeter Sensor Entity #########################################
+####################################################################################################
+
+
+class IBEMeterSensor(CoordinatorEntity, SensorEntity):
+
+    def __init__(self, coordinator, device, name, unit, icon, unique_id, field, visible, device_class, state_class, entity_category):
+        super().__init__(coordinator)
+        self._device = device
+        self._base_name = name
+        self._name = self._generate_name()
+        self._unit = unit
+        self._icon = icon
+        self._unique_id = unique_id
+        self._state = None
+        self._field = field
+        self._visible = visible
+        self._device_class = device_class
+        self._state_class = state_class
+        self._entity_category = entity_category
+
+    def process_field_value(field_name, value):
+        if field_name == "last_restart" and value:
+            try:
+                return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError as err:
+                _LOGGER.error("Error al convertir el valor de %s: %s", field_name, err)
+                return None
+        return value
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def unique_id(self):
+        return f"{self._device.mac}_{self._field}"
+
+    @property
+    def native_unit_of_measurement(self):
+        return self._unit
+
+    @property
+    def icon(self):
+        return self._icon
+    
+    @property
+    def device_class(self):
+        return self._device_class
+
+    @property
+    def state_class(self):
+        return self._state_class
+
+    @property
+    def entity_category(self):
+        return self._entity_category
+
+    @property
+    def native_value(self):
+        raw = getattr(self._device, self._field, None)
+
+        if self._field == "last_restart" and raw:
+            raw = IBEDivSensor.process_field_value(self._field, raw)
+
+        return raw
+
+    @property
+    def entity_registry_enabled_default(self) -> bool:
+        return self._visible
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self._device.mac)},
+            "name": self._device.name,
+            "manufacturer": "Ibepower Technologies S.L.",
+            "model": "Ibemeter",
             "sw_version": self._device.version,
             "connections": {("mac", self._device.mac)},
             "configuration_url": f"http://{self._device._host}:{self._device._port}",

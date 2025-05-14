@@ -4,7 +4,14 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.entity_registry import async_get
-from homeassistant.components.zeroconf import ZeroconfServiceInfo
+
+try:
+    # Para HA Core 2026.2 y versiones posteriores
+    from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
+except ImportError:
+    # Para versiones anteriores
+    from homeassistant.components.zeroconf import ZeroconfServiceInfo
+
 
 from .const import DOMAIN
 
@@ -24,6 +31,8 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             device_type = "Ibeplug"
         elif discovery_info.type == "_ibediv._tcp.local.":
             device_type = "Ibediv"
+        elif discovery_info.type == "_ibemeter._tcp.local.":
+            device_type = "Ibemeter"
         else:
             _LOGGER.debug("Dispositivo ignorado, tipo de servicio no reconocido.")
             return self.async_abort(reason="not_ibepower_device")

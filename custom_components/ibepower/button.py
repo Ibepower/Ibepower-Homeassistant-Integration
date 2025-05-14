@@ -26,6 +26,7 @@ class RebootDeviceButton(CoordinatorEntity, ButtonEntity):
     def __init__(self, coordinator, device, device_type):
         super().__init__(coordinator)
         self._device = device
+        self._device_type = device_type
         self._attr_name = self._generate_name()
         self._attr_unique_id = f"{device.mac}_reboot"
         self._attr_icon = "mdi:restart"
@@ -41,7 +42,7 @@ class RebootDeviceButton(CoordinatorEntity, ButtonEntity):
             "identifiers": {(DOMAIN, self._device.mac)},
             "name": self._device.name,
             "manufacturer": "Ibepower Technologies S.L.",
-            "model": "Ibediv",
+            "model": self._device_type,
             "sw_version": self._device.version,
             "connections": {("mac", self._device.mac)},
             "configuration_url": f"http://{self._device._host}:{self._device._port}",
@@ -62,6 +63,7 @@ class UpdateFirmwareButton(CoordinatorEntity, ButtonEntity):
     def __init__(self, coordinator, device, device_type):
         super().__init__(coordinator)
         self._device = device
+        self._device_type = device_type
         self._attr_name = self._generate_name()
         self._attr_unique_id = f"{device.mac}_update_firmware"
         self._attr_icon = "mdi:cloud-upload"
@@ -73,7 +75,7 @@ class UpdateFirmwareButton(CoordinatorEntity, ButtonEntity):
             "identifiers": {(DOMAIN, self._device.mac)},
             "name": self._device.name,
             "manufacturer": "Ibepower Technologies S.L.",
-            "model": "Ibediv",
+            "model": self._device_type,
             "sw_version": self._device.version,
             "connections": {("mac", self._device.mac)},
             "configuration_url": f"http://{self._device._host}:{self._device._port}",

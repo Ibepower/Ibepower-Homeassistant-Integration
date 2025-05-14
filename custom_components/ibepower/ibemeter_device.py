@@ -6,7 +6,7 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-class IBEDivDevice:
+class IBEMeterDevice:
     def __init__(self, hass, host, name, mac, version, description):
         self._hass = hass
         self._host = host
@@ -17,58 +17,19 @@ class IBEDivDevice:
         self._port = 80
         self.device_data = {}
         self._entity_id = None
-        self.diverter_is_on = False
         self._latest_version = None
         self.last_restart = None
         
         self.heap_memory = None
-        self.pwm_enabled = False
-        self.work_mode = None
-        self.pwm_value = None
-        self.calculated_watts = None
-        self.work_mode_name = None
-        self.master_mode_name = None
-        self.temp_shutdown = None
         self.chip_temperature = None
-        self.manualControlPercentage = None
 
         # Energía solar, red, batería
         self.solar_watts = None
+        self.solar_current = None
         self.grid_watts = None
         self.grid_voltage = None
         self.grid_current = None
         self.grid_frequency = None
-        self.battery_voltage = None
-        self.battery_current = None
-        self.battery_power = None
-        self.battery_soc = None
-        self.load_watts = None
-        self.today_watts = None
-
-        # Energía solar (PV)
-        self.pv1_current = None
-        self.pv1_voltage = None
-        self.pv1_power = None
-        self.pv2_current = None
-        self.pv2_voltage = None
-        self.pv2_power = None
-
-        # Temperaturas
-        self.inverter_temperature = None
-        self.thermo_temperature = None
-        self.ibepower_temperature = None
-        self.custom_temperature = None
-        self.thermo_sensor_name = None
-        self.custom_sensor_name = None
-
-        # Datos de energía: diverter, importación, exportación
-        self.kw_diverter_today = None
-        self.kw_diverter_yesterday = None
-        self.kw_diverter_month = None
-        self.kw_diverter_last_month = None
-        self.kw_diverter_year = None
-        self.kw_diverter_last_year = None
-        self.kw_diverter_total = None
 
         # Energía importada
         self.kw_import_today = None
@@ -146,56 +107,16 @@ class IBEDivDevice:
                         return
                     self.device_data = await response.json()
 
-                    self.pwm_enabled = self.device_data.get("pwmE")
-                    self.diverter_is_on = self.device_data.get("pwmE")
-                    self.manualControlPercentage = self.device_data.get("mCP")
-                    
                     self.heap_memory = self.device_data.get("Heap")
-                    self.work_mode = self.device_data.get("wM")
-                    self.pwm_value = self.device_data.get("pwmV")
-                    self.calculated_watts = self.device_data.get("hW")
-                    self.work_mode_name = self.device_data.get("wMN")
-                    self.master_mode_name = self.device_data.get("mMN")
-                    self.temp_shutdown = self.device_data.get("tSD")
                     self.chip_temperature = self.device_data.get("cT")
 
-                    # Energía solar, red, batería
+                    # Energía solar, red
                     self.solar_watts = self.device_data.get("sW")
+                    self.solar_current = self.device_data.get("sC")
                     self.grid_watts = self.device_data.get("gW")
                     self.grid_voltage = self.device_data.get("gV")
                     self.grid_current = self.device_data.get("gC")
                     self.grid_frequency = self.device_data.get("gF")
-                    self.battery_voltage = self.device_data.get("bV")
-                    self.battery_current = self.device_data.get("bA")
-                    self.battery_power = self.device_data.get("bW")
-                    self.battery_soc = self.device_data.get("SoC")
-                    self.load_watts = self.device_data.get("lW")
-                    self.today_watts = self.device_data.get("tW")
-
-                    # Energía solar (PV)
-                    self.pv1_current = self.device_data.get("p1A")
-                    self.pv1_voltage = self.device_data.get("p1V")
-                    self.pv1_power = self.device_data.get("p1W")
-                    self.pv2_current = self.device_data.get("p2A")
-                    self.pv2_voltage = self.device_data.get("p2V")
-                    self.pv2_power = self.device_data.get("p2W")
-
-                    # Temperaturas
-                    self.inverter_temperature = self.device_data.get("iTmp")
-                    self.thermo_temperature = self.device_data.get("tT")
-                    self.ibepower_temperature = self.device_data.get("tI")
-                    self.custom_temperature = self.device_data.get("tC")
-                    self.thermo_sensor_name = self.device_data.get("tTN")
-                    self.custom_sensor_name = self.device_data.get("tCN")
-
-                    # Datos de energía: diverter, importación, exportación
-                    self.kw_diverter_today = self.device_data.get("KwDT")
-                    self.kw_diverter_yesterday = self.device_data.get("KwDY")
-                    self.kw_diverter_month = self.device_data.get("KwDM")
-                    self.kw_diverter_last_month = self.device_data.get("KwDLM")
-                    self.kw_diverter_year = self.device_data.get("KwDYR")
-                    self.kw_diverter_last_year = self.device_data.get("KwDLYR")
-                    self.kw_diverter_total = self.device_data.get("KwDTT")
 
                     # Energía importada
                     self.kw_import_today = self.device_data.get("KwT")
@@ -228,23 +149,6 @@ class IBEDivDevice:
         except aiohttp.ClientError as error:
             _LOGGER.error(f"Error de conexión al dispositivo {self._name}: {error}")
 
-    async def async_turn_on_diverter(self):
-        return await self._send_command("pwm", "1")
-
-    async def async_turn_off_diverter(self):
-        return await self._send_command("pwm", "0")
-    
-    async def async_select_work_mode(self, mode):
-        if mode == "AUTO":
-            payload = "0"
-        elif mode == "MANUAL":
-            payload = "1"
-        
-        return await self._send_command("pwmman", payload)
-
-    async def async_set_pwm_value(self, value):
-        return await self._send_command("setManualControlPercentage", value)
-
     async def _send_command(self, command, value):
         url = f"http://{self._host}:{self._port}/cmnd?cmnd={{\"command\":\"{command}\",\"payload\":\"{value}\"}}"
         try:
@@ -265,7 +169,7 @@ class IBEDivDevice:
 
     async def update_firmware(self):
         """Comprueba si hay una nueva versión de firmware disponible."""
-        update_endpoint = "https://www.ibepower.com/firmware/version_IBEDIV"
+        update_endpoint = "https://www.ibepower.com/firmware/version_IBEMETER"
 
         async with aiohttp.ClientSession() as session:
             try:
