@@ -17,15 +17,32 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     if device_type == "Ibediv":
 
         div_manual_slider = IBEDivManualSlider(coordinator, device)
+        div_brightness_slider = IBEDivBrightnessSlider(coordinator, device)
         
-        entities.append(div_manual_slider)
+        entities.extend([div_manual_slider, div_brightness_slider])
 
         _LOGGER.debug("[SLIDER] Slider Name: %s, Slider Unique ID: %s", div_manual_slider._attr_name, div_manual_slider.unique_id)
+        _LOGGER.debug("[SLIDER] Slider Name: %s, Slider Unique ID: %s", div_brightness_slider._attr_name, div_brightness_slider.unique_id)
 
         if DOMAIN not in hass.data:
             hass.data[DOMAIN] = {}
 
         hass.data[DOMAIN][div_manual_slider.unique_id] = div_manual_slider
+        hass.data[DOMAIN][div_brightness_slider.unique_id] = div_brightness_slider
+    
+    elif device_type == "Ibemeter":
+
+        meter_brightness_slider = IBEMeterBrightnessSlider(coordinator, device)
+        
+        entities.append(meter_brightness_slider)
+
+        _LOGGER.debug("[SLIDER] Slider Name: %s, Slider Unique ID: %s", meter_brightness_slider._attr_name, meter_brightness_slider.unique_id)
+
+        if DOMAIN not in hass.data:
+            hass.data[DOMAIN] = {}
+
+        hass.data[DOMAIN][meter_brightness_slider.unique_id] = meter_brightness_slider
+
 
     async_add_entities(entities)
 
@@ -83,3 +100,109 @@ class IBEDivManualSlider(CoordinatorEntity, NumberEntity):
 
     def _generate_name(self):
         return f"Manual (%) ({self._device.description})"
+
+class IBEDivBrightnessSlider(CoordinatorEntity, NumberEntity):
+    def __init__(self, coordinator, device):
+        super().__init__(coordinator)
+        self._device = device
+        self._attr_name = self._generate_name()
+        self._attr_native_min_value = 0
+        self._attr_native_max_value = 100
+        self._attr_native_step = 1
+        self._attr_native_unit_of_measurement = "%"
+        self._attr_native_value = self._device.brightnessPercentage
+    
+    @property
+    def name(self):
+        return self._generate_name()
+
+    @property
+    def unique_id(self):
+        return f"{self._device.mac}_brightness_value_setter"
+
+    @property
+    def native_value(self) -> int | None:
+        return self._device.brightnessPercentage
+    
+    @property
+    def mode(self) -> str:
+        return "auto" # "auto", "slider", "box"
+
+    async def async_set_native_value(self, value: int):
+        await self._device.async_set_brightness_value(value)
+        self._attr_value = value
+        self.async_write_ha_state()
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self._device.mac)},
+            "name": self._device.name,
+            "manufacturer": "Ibepower Technologies S.L.",
+            "model": "Ibediv",
+            "sw_version": self._device.version,
+            "connections": {("mac", self._device.mac)},
+            "configuration_url": f"http://{self._device._host}:{self._device._port}",
+        }
+    
+    def update_name(self):
+        self._name = self._generate_name()
+        self.async_write_ha_state()
+
+    def _generate_name(self):
+        return f"Brightness (%) ({self._device.description})"
+
+####################################################################################################
+################################## Ibemeter Number Entity ##########################################
+####################################################################################################
+
+class IBEMeterBrightnessSlider(CoordinatorEntity, NumberEntity):
+    def __init__(self, coordinator, device):
+        super().__init__(coordinator)
+        self._device = device
+        self._attr_name = self._generate_name()
+        self._attr_native_min_value = 0
+        self._attr_native_max_value = 100
+        self._attr_native_step = 1
+        self._attr_native_unit_of_measurement = "%"
+        self._attr_native_value = self._device.brightnessPercentage
+    
+    @property
+    def name(self):
+        return self._generate_name()
+
+    @property
+    def unique_id(self):
+        return f"{self._device.mac}_brightness_value_setter"
+
+    @property
+    def native_value(self) -> int | None:
+        return self._device.brightnessPercentage
+    
+    @property
+    def mode(self) -> str:
+        return "auto" # "auto", "slider", "box"
+
+    async def async_set_native_value(self, value: int):
+        await self._device.async_set_brightness_value(value)
+        self._attr_value = value
+        self.async_write_ha_state()
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self._device.mac)},
+            "name": self._device.name,
+            "manufacturer": "Ibepower Technologies S.L.",
+            "model": "Ibemeter",
+            "sw_version": self._device.version,
+            "connections": {("mac", self._device.mac)},
+            "configuration_url": f"http://{self._device._host}:{self._device._port}",
+        }
+    
+    def update_name(self):
+        self._name = self._generate_name()
+        self.async_write_ha_state()
+
+    def _generate_name(self):
+        return f"Brightness (%) ({self._device.description})"

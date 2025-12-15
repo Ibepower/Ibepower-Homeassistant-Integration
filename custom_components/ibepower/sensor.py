@@ -29,6 +29,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             "kwyesterday": {"name": "KwYesterday", "unit": "kWh", "icon": "mdi:calendar-arrow-left", "field": "kw_yesterday", "device_class": "energy", "state_class": "total"},
             "factor": {"name": "Power Factor", "unit": "%", "icon": "mdi:cosine-wave", "field": "factor", "device_class": "power_factor", "state_class": "measurement"},
             "current": {"name": "Current", "unit": "A", "icon": "mdi:current-ac", "field": "current", "device_class": "current", "state_class": "measurement"},
+            "lRST": {"name": "Last Restart Time", "unit": None, "icon": "mdi:restart", "field": "last_restart", "visible": True, "device_class": "timestamp", "state_class": None, "entity_category": EntityCategory.DIAGNOSTIC},
         }
 
         for sensor_info in sensor_definitions_ibeplug.values():
@@ -40,7 +41,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                         icon=sensor_info["icon"],
                         field=sensor_info["field"],
                         device_class=sensor_info["device_class"],
-                        state_class=sensor_info["state_class"]
+                        state_class=sensor_info["state_class"],
+                        entity_category=sensor_info.get("entity_category")
                     )
 
             entities.append(sensor_ibeplug_entity)
@@ -247,7 +249,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 ####################################################################################################
 
 class IBEPlugSensor(CoordinatorEntity, SensorEntity):
-    def __init__(self, coordinator, device, name, unit, icon, field, device_class, state_class):
+    def __init__(self, coordinator, device, name, unit, icon, field, device_class, state_class, entity_category=None):
         super().__init__(coordinator)
         self._device = device
         self._base_name = name
@@ -257,6 +259,16 @@ class IBEPlugSensor(CoordinatorEntity, SensorEntity):
         self._field = field
         self._device_class = device_class
         self._state_class = state_class
+        self._entity_category = entity_category
+    
+    def process_field_value(field_name, value):
+        if field_name == "last_restart" and value:
+            try:
+                return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError as err:
+                _LOGGER.error("Error al convertir el valor de %s: %s", field_name, err)
+                return None
+        return value
         
     @property
     def name(self):
@@ -283,8 +295,17 @@ class IBEPlugSensor(CoordinatorEntity, SensorEntity):
         return self._state_class
 
     @property
+    def entity_category(self):
+        return self._entity_category
+
+    @property
     def native_value(self):
-        return getattr(self._device, self._field, None)
+        raw = getattr(self._device, self._field, None)
+
+        if self._field == "last_restart" and raw:
+            raw = IBEPlugSensor.process_field_value(self._field, raw)
+
+        return raw
     
     @property
     def last_reset(self):

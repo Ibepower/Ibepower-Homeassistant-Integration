@@ -27,14 +27,28 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     elif device_type == "Ibediv":
         div_entity = IBEDivSwitchOnOff(coordinator, device)
-        entities.append(div_entity)
+        screen_entity = IBEDivScreenSwitch(coordinator, device)
+        entities.extend([div_entity, screen_entity])
 
         _LOGGER.debug("[SWITCH] Switch Name: %s, Switch Unique ID: %s", div_entity.name, div_entity.unique_id)
+        _LOGGER.debug("[SWITCH] Switch Name: %s, Switch Unique ID: %s", screen_entity.name, screen_entity.unique_id)
 
         if DOMAIN not in hass.data:
             hass.data[DOMAIN] = {}
 
         hass.data[DOMAIN][div_entity.unique_id] = div_entity
+        hass.data[DOMAIN][screen_entity.unique_id] = screen_entity
+    
+    elif device_type == "Ibemeter":
+        screen_entity = IBEMeterScreenSwitch(coordinator, device)
+        entities.append(screen_entity)
+
+        _LOGGER.debug("[SWITCH] Switch Name: %s, Switch Unique ID: %s", screen_entity.name, screen_entity.unique_id)
+
+        if DOMAIN not in hass.data:
+            hass.data[DOMAIN] = {}
+
+        hass.data[DOMAIN][screen_entity.unique_id] = screen_entity
 
     async_add_entities(entities)
 
@@ -109,10 +123,11 @@ class IBEDivSwitchOnOff(CoordinatorEntity, SwitchEntity):
     def __init__(self, coordinator, device):
         super().__init__(coordinator)
         self._device = device
+        self._attr_name = self._generate_name()
 
     @property
     def name(self):
-        return self._device.name
+        return self._generate_name()
     
     @property
     def unique_id(self):
@@ -164,4 +179,112 @@ class IBEDivSwitchOnOff(CoordinatorEntity, SwitchEntity):
         else:
             self._device.diverter_is_on = True
 
+        self.async_write_ha_state()
+
+class IBEDivScreenSwitch(CoordinatorEntity, SwitchEntity):
+
+    def __init__(self, coordinator, device):
+        super().__init__(coordinator)
+        self._device = device
+        self._attr_name = self._generate_name()
+
+    @property
+    def name(self):
+        return self._generate_name()
+    
+    @property
+    def unique_id(self):
+        return f"{self._device.mac}_switch_screen"
+
+    @property
+    def is_on(self):
+        return self._device.screen_is_on
+    
+    @property
+    def icon(self):
+        return "mdi:monitor"
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self._device.mac)},
+            "name": self._device.name,
+            "manufacturer": "Ibepower Technologies S.L.",
+            "model": "Ibediv",
+            "sw_version": self._device.version,
+            "connections": {("mac", self._device.mac)},
+            "configuration_url": f"http://{self._device._host}:{self._device._port}",
+        }
+    
+    def update_name(self):
+        self._device.name = self._generate_name()
+        self.async_write_ha_state()
+
+    def _generate_name(self):
+        return f"Screen ({self._device.description})"
+    
+    async def async_turn_on(self):
+        response = await self._device.async_turn_on_screen()
+        self._device.screen_is_on = bool(response)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self):
+        response = await self._device.async_turn_off_screen()
+        self._device.screen_is_on = not bool(response)
+        self.async_write_ha_state()
+
+####################################################################################################
+################################## Ibemeter Switch Entity ##########################################
+####################################################################################################
+
+class IBEMeterScreenSwitch(CoordinatorEntity, SwitchEntity):
+
+    def __init__(self, coordinator, device):
+        super().__init__(coordinator)
+        self._device = device
+        self._attr_name = self._generate_name()
+
+    @property
+    def name(self):
+        return self._generate_name()
+    
+    @property
+    def unique_id(self):
+        return f"{self._device.mac}_switch_screen"
+
+    @property
+    def is_on(self):
+        return self._device.screen_is_on
+    
+    @property
+    def icon(self):
+        return "mdi:monitor"
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self._device.mac)},
+            "name": self._device.name,
+            "manufacturer": "Ibepower Technologies S.L.",
+            "model": "Ibemeter",
+            "sw_version": self._device.version,
+            "connections": {("mac", self._device.mac)},
+            "configuration_url": f"http://{self._device._host}:{self._device._port}",
+        }
+    
+    def update_name(self):
+        self._device.name = self._generate_name()
+        self.async_write_ha_state()
+
+    def _generate_name(self):
+        return f"Screen ({self._device.description})"
+    
+    async def async_turn_on(self):
+        response = await self._device.async_turn_on_screen()
+        self._device.screen_is_on = bool(response)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self):
+        response = await self._device.async_turn_off_screen()
+        self._device.screen_is_on = not bool(response)
         self.async_write_ha_state()

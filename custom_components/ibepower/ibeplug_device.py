@@ -25,6 +25,8 @@ class IBEPlugDevice:
         self.current = None
         self._entity_id = None
         self._latest_version = None
+        self.last_restart = None
+        self._session = None
 
     @property
     def name(self):
@@ -65,25 +67,35 @@ class IBEPlugDevice:
     def set_entity_id(self, entity_id):
         self._entity_id = entity_id
 
+    async def async_init_session(self):
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+
+    async def async_close_session(self):
+        if self._session is not None:
+            await self._session.close()
+            self._session = None
+
     async def async_update_data(self):
+        await self.async_init_session()
         url = f"http://{self._host}:{self._port}/cm?cmnd=Energy"
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
-                    if response.status != 200:
-                        _LOGGER.error(f"Error al obtener los datos del dispositivo {self._name}: {response.status}")
-                        return
-                    data = await response.json()
+            async with self._session.get(url) as response:
+                if response.status != 200:
+                    _LOGGER.error(f"Error al obtener los datos del dispositivo {self._name}: {response.status}")
+                    return
+                data = await response.json()
 
-                    energy_data = data.get("ENERGY", {})
-                    self.voltage = energy_data.get("Voltage")
-                    self.consumption = energy_data.get("KwToday")
-                    self.power = energy_data.get("Power")
-                    self.kw_total = energy_data.get("KwTotal")
-                    self.kw_yesterday = energy_data.get("KwYesterday")
-                    self.factor = energy_data.get("Factor")
-                    self.current = energy_data.get("Current")
-                    self.is_on = energy_data.get("Relay") == "ON"
+                energy_data = data.get("ENERGY", {})
+                self.voltage = energy_data.get("Voltage")
+                self.consumption = energy_data.get("KwToday")
+                self.power = energy_data.get("Power")
+                self.kw_total = energy_data.get("KwTotal")
+                self.kw_yesterday = energy_data.get("KwYesterday")
+                self.factor = energy_data.get("Factor")
+                self.current = energy_data.get("Current")
+                self.is_on = energy_data.get("Relay") == "ON"
+                self.last_restart = energy_data.get("lRST")
 
         except aiohttp.ClientError as error:
             _LOGGER.error(f"Error de conexión al dispositivo {self._name}: {error}")
@@ -95,16 +107,16 @@ class IBEPlugDevice:
         return await self._send_command("Power", "0")
 
     async def _send_command(self, command, value):
+        await self.async_init_session()
         url = f"http://{self._host}:{self._port}/cm?cmnd={command}%20{value}"
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
-                    if response.status != 200:
-                        _LOGGER.error(f"Error al enviar el comando {command} al dispositivo {self._name}: {response.status}")
-                        return None
-                    data = await response.json()
-                    _LOGGER.debug(f"Comando {command} enviado con éxito, respuesta: {data}")
-                    return data
+            async with self._session.get(url) as response:
+                if response.status != 200:
+                    _LOGGER.error(f"Error al enviar el comando {command} al dispositivo {self._name}: {response.status}")
+                    return None
+                data = await response.json()
+                _LOGGER.debug(f"Comando {command} enviado con éxito, respuesta: {data}")
+                return data
         except aiohttp.ClientError as error:
             _LOGGER.error(f"Error de conexión al enviar el comando {command} al dispositivo {self._name}: {error}")
             return None
@@ -115,83 +127,81 @@ class IBEPlugDevice:
     async def update_firmware(self):
         """Comprueba si hay una nueva versión de firmware disponible."""
         update_endpoint = "https://www.ibepower.com/firmware/version_IBEPLUG"
+        await self.async_init_session()
+        try:
+            async with self._session.get(update_endpoint) as response:
+                if response.status == 200:
+                    text = await response.text()
+                    data = json.loads(text)
+                    self._latest_version = data.get("version")
 
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.get(update_endpoint) as response:
-                    if response.status == 200:
-                        text = await response.text()
-                        data = json.loads(text)
-                        self._latest_version = data.get("version")
+                    if self._latest_version != self._version:
+                        await self._hass.services.async_call(
+                            "persistent_notification",
+                            "create",
+                            {
+                                "title": "Actualización de Firmware",
+                                "message": f"Se ha detectado una nueva versión de firmware: {self._latest_version}. Iniciando actualización."
+                            }
+                        )
 
-                        if self._latest_version != self._version:
-                            await self._hass.services.async_call(
-                                "persistent_notification",
-                                "create",
-                                {
-                                    "title": "Actualización de Firmware",
-                                    "message": f"Se ha detectado una nueva versión de firmware: {self._latest_version}. Iniciando actualización."
-                                }
-                            )
+                        self._hass.bus.async_fire(
+                            f"{DOMAIN}_firmware_update",
+                            {
+                                "message": f"Se ha detectado una nueva versión de firmware: {self._latest_version}. Iniciando actualización.",
+                                "entity_id": self._entity_id
+                            }
+                        )
 
-                            self._hass.bus.async_fire(
-                                f"{DOMAIN}_firmware_update",
-                                {
-                                    "message": f"Se ha detectado una nueva versión de firmware: {self._latest_version}. Iniciando actualización.",
-                                    "entity_id": self._entity_id
-                                }
-                            )
-
-                            return await self._send_command("doOTA", "1")
-                        else:
-                            await self._hass.services.async_call(
-                                "persistent_notification",
-                                "create",
-                                {
-                                    "title": "Actualización de Firmware",
-                                    "message": f"{self._name} ya está en la última versión de firmware. Versión actual: {self._version}"
-                                }
-                            )
-
-                            self._hass.bus.async_fire(
-                                f"{DOMAIN}_firmware_update",
-                                {
-                                    "message": f"{self._name} ya está en la última versión de firmware. Versión actual: {self._version}",
-                                    "entity_id": self._entity_id
-                                }
-                            )
+                        return await self._send_command("doOTA", "1")
                     else:
                         await self._hass.services.async_call(
                             "persistent_notification",
                             "create",
                             {
                                 "title": "Actualización de Firmware",
-                                "message": f"Error al consultar el endpoint de actualización: {response.status}"
+                                "message": f"{self._name} ya está en la última versión de firmware. Versión actual: {self._version}"
                             }
                         )
-                        
+
                         self._hass.bus.async_fire(
                             f"{DOMAIN}_firmware_update",
                             {
-                                "message": f"Error al consultar el endpoint de actualización: {response.status}",
+                                "message": f"{self._name} ya está en la última versión de firmware. Versión actual: {self._version}",
                                 "entity_id": self._entity_id
                             }
                         )
-                        
-            except Exception as e:
-                await self._hass.services.async_call(
-                    "persistent_notification",
-                    "create",
-                    {
-                        "title": "Actualización de Firmware",
-                        "message": f"Excepción al consultar el endpoint de actualización: {e}"
-                    }
-                )
+                else:
+                    await self._hass.services.async_call(
+                        "persistent_notification",
+                        "create",
+                        {
+                            "title": "Actualización de Firmware",
+                            "message": f"Error al consultar el endpoint de actualización: {response.status}"
+                        }
+                    )
+                    
+                    self._hass.bus.async_fire(
+                        f"{DOMAIN}_firmware_update",
+                        {
+                            "message": f"Error al consultar el endpoint de actualización: {response.status}",
+                            "entity_id": self._entity_id
+                        }
+                    )
+        except Exception as e:
+            await self._hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "title": "Actualización de Firmware",
+                    "message": f"Excepción al consultar el endpoint de actualización: {e}"
+                }
+            )
 
-                self._hass.bus.async_fire(
-                    f"{DOMAIN}_firmware_update",
-                    {
-                        "message": f"Error al consultar el endpoint de actualización: {e}",
-                        "entity_id": self._entity_id
-                    }
-                )
+            self._hass.bus.async_fire(
+                f"{DOMAIN}_firmware_update",
+                {
+                    "message": f"Error al consultar el endpoint de actualización: {e}",
+                    "entity_id": self._entity_id
+                }
+            )
