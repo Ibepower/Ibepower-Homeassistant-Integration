@@ -111,6 +111,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         name=f"{device.name} Coordinator",
         update_method=device.async_update_data,
         update_interval=timedelta(seconds=10),
+        always_update=True,
     )
 
     _LOGGER.debug("[Init] Device Name: %s, Device Mac: %s, Device Version: %s, Device Description: %s, Device Type: %s", device.name, device.mac, device.version, device.description, device_type)

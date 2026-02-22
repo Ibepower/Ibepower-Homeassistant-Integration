@@ -1,6 +1,7 @@
 import aiohttp
 import logging
 import json
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .const import DOMAIN
 
@@ -83,8 +84,9 @@ class IBEPlugDevice:
         try:
             async with self._session.get(url, timeout=REQUEST_TIMEOUT) as response:
                 if response.status != 200:
-                    _LOGGER.error(f"Error al obtener los datos del dispositivo {self._name}: {response.status}")
-                    return
+                    raise UpdateFailed(
+                        f"Error al obtener los datos del dispositivo {self._name}: {response.status}"
+                    )
                 data = await response.json()
 
                 energy_data = data.get("ENERGY", {})
@@ -97,9 +99,10 @@ class IBEPlugDevice:
                 self.current = energy_data.get("Current")
                 self.is_on = energy_data.get("Relay") == "ON"
                 self.last_restart = energy_data.get("lRST")
+                return energy_data
 
         except (aiohttp.ClientError, TimeoutError) as error:
-            _LOGGER.error(f"Error de conexión al dispositivo {self._name}: {error}")
+            raise UpdateFailed(f"Error de conexión al dispositivo {self._name}: {error}") from error
 
     async def async_turn_on(self):
         return await self._send_command("Power", "1")

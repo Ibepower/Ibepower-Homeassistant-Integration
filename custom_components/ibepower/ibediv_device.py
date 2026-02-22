@@ -1,6 +1,7 @@
 import aiohttp
 import logging
 import json
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .const import DOMAIN
 
@@ -156,8 +157,9 @@ class IBEDivDevice:
         try:
             async with self._session.get(url, timeout=REQUEST_TIMEOUT) as response:
                 if response.status != 200:
-                    _LOGGER.error(f"Error al obtener los datos del dispositivo {self._name}: {response.status}")
-                    return
+                    raise UpdateFailed(
+                        f"Error al obtener los datos del dispositivo {self._name}: {response.status}"
+                    )
                 self.device_data = await response.json()
 
                 self.pwm_enabled = self.device_data.get("pwmE")
@@ -240,9 +242,10 @@ class IBEDivDevice:
                 self.kw_solar_last_year = self.device_data.get("KwSLYR")
                 self.kw_solar_total = self.device_data.get("KwSTT")
                 self.last_restart = self.device_data.get("lRST")
+                return self.device_data
 
         except (aiohttp.ClientError, TimeoutError) as error:
-            _LOGGER.error(f"Error de conexión al dispositivo {self._name}: {error}")
+            raise UpdateFailed(f"Error de conexión al dispositivo {self._name}: {error}") from error
 
     async def async_turn_on_diverter(self):
         return await self._send_command("pwm", "1")

@@ -211,9 +211,9 @@ card:
         card:
           - border-radius: 24px
           - padding: 16px 16px 12px
-          - border: 1px solid rgba(75, 204, 226, 0.40)
-          - background: radial-gradient(circle at 18% 14%, rgba(255, 205, 15, 0.18), transparent 40%), radial-gradient(circle at 84% 85%, rgba(75, 204, 226, 0.16), transparent 44%), radial-gradient(circle at 50% 88%, rgba(161, 210, 28, 0.10), transparent 48%), linear-gradient(145deg, rgba(64, 92, 68, 0.90), rgba(90, 124, 96, 0.88))
-          - box-shadow: 0 8px 28px rgba(0, 0, 0, 0.42)
+          - border: 1px solid rgba(120, 220, 80, 0.90)
+          - background: radial-gradient(circle at 18% 14%, rgba(255, 185, 0, 0.32), transparent 40%), radial-gradient(circle at 84% 85%, rgba(0, 210, 255, 0.22), transparent 44%), radial-gradient(circle at 50% 88%, rgba(140, 230, 60, 0.18), transparent 48%), linear-gradient(145deg, rgba(38, 118, 58, 0.92), rgba(52, 148, 74, 0.90))
+          - box-shadow: 0 8px 32px rgba(0, 0, 0, 0.58)
         name:
           - justify-self: center
           - color: '#ffffff'
@@ -243,9 +243,9 @@ card:
           justify-content: center;
           padding: 5px 9px;
           border-radius: 10px;
-          background: rgba(255, 255, 255, 0.10);
-          border: 1px solid rgba(126, 207, 226, 0.32);
-          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.30);
+          background: rgba(255, 255, 255, 0.07);
+          border: 1px solid rgba(0, 210, 255, 0.28);
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
         }
         .ibep-brand-logo {
           display: block;
@@ -261,11 +261,11 @@ card:
           border-radius: 18px;
           overflow: hidden;
           background:
-            radial-gradient(circle at 18% 14%, rgba(255, 205, 15, 0.18), transparent 38%),
-            radial-gradient(circle at 82% 78%, rgba(75, 204, 226, 0.15), transparent 42%),
-            radial-gradient(circle at 54% 88%, rgba(161, 210, 28, 0.08), transparent 48%),
-            linear-gradient(155deg, rgba(56, 80, 60, 0.88), rgba(78, 108, 84, 0.86));
-          border: 1px solid rgba(124, 207, 226, 0.26);
+            radial-gradient(circle at 18% 14%, rgba(255, 185, 0, 0.28), transparent 38%),
+            radial-gradient(circle at 82% 78%, rgba(0, 210, 255, 0.22), transparent 42%),
+            radial-gradient(circle at 54% 88%, rgba(120, 220, 60, 0.18), transparent 48%),
+            linear-gradient(155deg, rgba(32, 106, 50, 0.94), rgba(46, 138, 66, 0.92));
+          border: 1px solid rgba(140, 230, 90, 0.85);
         }
         .ibep-flow-wrap::before {
           content: "";
@@ -273,7 +273,7 @@ card:
           inset: 0;
           z-index: 0;
           pointer-events: none;
-          background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.028) 0px, rgba(255, 255, 255, 0.028) 1px, transparent 1px, transparent 24px);
+          background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0px, rgba(255, 255, 255, 0.018) 1px, transparent 1px, transparent 28px);
         }
     
         .ibep-flow-center {
@@ -285,15 +285,15 @@ card:
           height: 14px;
           transform: translate(-50%, -50%);
           border-radius: 50%;
-          background: #A1D21C;
-          box-shadow: 0 0 10px rgba(161, 210, 28, 0.62);
+          background: #00D2FF;
+          box-shadow: 0 0 10px rgba(0, 210, 255, 0.72);
         }
         .ibep-flow-center.live {
           animation: centerBeat 1.6s ease-in-out infinite;
-          box-shadow: 0 0 16px rgba(161, 210, 28, 0.88), 0 0 28px rgba(121, 188, 28, 0.42);
+          box-shadow: 0 0 18px rgba(0, 210, 255, 0.95), 0 0 32px rgba(0, 180, 230, 0.48);
         }
         .ibep-flow-center.idle {
-          opacity: 0.65;
+          opacity: 0.55;
         }
     
         .ibep-flow-pipe {
@@ -311,10 +311,10 @@ card:
           opacity: 1;
           box-shadow: 0 0 10px var(--flow-glow, rgba(121, 188, 28, 0.5));
         }
-        .ibep-flow-pipe.solar { --flow-color: #FFCD0F; --flow-glow: rgba(255, 205, 15, 0.60); }
-        .ibep-flow-pipe.grid { --flow-color: #4BCCE2; --flow-glow: rgba(75, 204, 226, 0.58); }
-        .ibep-flow-pipe.home { --flow-color: #A1D21C; --flow-glow: rgba(161, 210, 28, 0.56); }
-        .ibep-flow-pipe.battery { --flow-color: #7ECFE2; --flow-glow: rgba(126, 207, 226, 0.58); }
+        .ibep-flow-pipe.solar { --flow-color: #FFB800; --flow-glow: rgba(255, 184, 0, 0.72); }
+        .ibep-flow-pipe.grid { --flow-color: #00D2FF; --flow-glow: rgba(0, 210, 255, 0.72); }
+        .ibep-flow-pipe.home { --flow-color: #78DC14; --flow-glow: rgba(120, 220, 20, 0.68); }
+        .ibep-flow-pipe.battery { --flow-color: #60CFFF; --flow-glow: rgba(96, 207, 255, 0.70); }
     
         .pipe-top {
           left: calc(50% - 1.5px);
@@ -371,49 +371,53 @@ card:
           text-align: center;
           padding: 8px 9px;
           box-sizing: border-box;
-          border: 1.5px solid var(--node-accent, #A1D21C);
-          background: radial-gradient(circle at 34% 28%, rgba(52, 52, 52, 0.94), rgba(30, 30, 30, 0.97));
-          box-shadow: inset 0 0 18px rgba(255, 255, 255, 0.05), 0 4px 14px rgba(0,0,0,0.42);
+          border: 1.5px solid var(--node-accent, #78DC14);
+          background: radial-gradient(circle at 34% 28%, rgba(22, 38, 56, 0.94), rgba(14, 26, 42, 0.96));
+          box-shadow: inset 0 0 22px rgba(255, 255, 255, 0.04), 0 4px 18px rgba(0,0,0,0.56);
           transition: transform 0.25s ease, box-shadow 0.25s ease, opacity 0.25s ease;
         }
         .ibep-flow-node.node-active {
           opacity: 1;
           animation: nodeBreathe 2.6s ease-in-out infinite;
-          box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.06), 0 0 16px var(--node-glow, rgba(161, 210, 28, 0.46));
+          box-shadow: inset 0 0 24px rgba(255, 255, 255, 0.05), 0 0 20px var(--node-glow, rgba(120, 220, 20, 0.52));
         }
         .ibep-flow-node.node-idle {
-          opacity: 0.88;
+          opacity: 0.82;
         }
         .node-solar {
           top: 6px;
           left: calc(50% - 66px);
-          --node-accent: #FFCD0F;
-          --node-glow: rgba(255, 205, 15, 0.52);
+          --node-accent: #FFB800;
+          --node-glow: rgba(255, 184, 0, 0.62);
+          background: radial-gradient(circle at 34% 28%, rgba(70, 50, 10, 0.94), rgba(50, 35, 5, 0.96));
         }
         .node-grid {
           top: 112px;
           left: 8px;
-          --node-accent: #4BCCE2;
-          --node-glow: rgba(75, 204, 226, 0.52);
+          --node-accent: #00D2FF;
+          --node-glow: rgba(0, 210, 255, 0.60);
+          background: radial-gradient(circle at 34% 28%, rgba(10, 40, 70, 0.94), rgba(5, 25, 50, 0.96));
         }
         .node-home {
           top: 112px;
           right: 8px;
-          --node-accent: #79BC1C;
-          --node-glow: rgba(121, 188, 28, 0.48);
+          --node-accent: #78DC14;
+          --node-glow: rgba(120, 220, 20, 0.58);
+          background: radial-gradient(circle at 34% 28%, rgba(30, 60, 10, 0.94), rgba(20, 40, 5, 0.96));
         }
         .node-battery {
           bottom: 6px;
           left: calc(50% - 66px);
-          --node-accent: #7ECFE2;
-          --node-glow: rgba(126, 207, 226, 0.52);
+          --node-accent: #60CFFF;
+          --node-glow: rgba(96, 207, 255, 0.60);
+          background: radial-gradient(circle at 34% 28%, rgba(10, 60, 60, 0.94), rgba(5, 40, 40, 0.96));
         }
     
         .node-title {
-          color: #a8d8e8;
+          color: #8ee8ff;
           width: 100%;
           max-width: 100%;
-          font-size: 0.80rem;
+          font-size: 1.02rem;
           font-weight: 600;
           line-height: 1.1;
           letter-spacing: 0.03em;
@@ -425,7 +429,7 @@ card:
           color: #ffffff;
           width: 100%;
           max-width: 100%;
-          font-size: 1.05rem;
+          font-size: 1.36rem;
           font-weight: 700;
           line-height: 1.1;
           letter-spacing: 0.01em;
@@ -435,10 +439,10 @@ card:
           text-overflow: ellipsis;
         }
         .node-sub {
-          color: #7ECFE2;
+          color: #60CFFF;
           width: 100%;
           max-width: 100%;
-          font-size: 0.62rem;
+          font-size: 0.80rem;
           font-weight: 500;
           line-height: 1.18;
           letter-spacing: 0.01em;
@@ -524,13 +528,13 @@ card:
             height: 41px;
           }
           .node-title {
-            font-size: 0.8rem;
+            font-size: 0.96rem;
           }
           .node-main {
-            font-size: 0.9rem;
+            font-size: 1.18rem;
           }
           .node-sub {
-            font-size: 0.6rem;
+            font-size: 0.76rem;
           }
         }
     - type: custom:button-card
@@ -609,8 +613,8 @@ card:
           - border-radius: 14px
           - margin-top: 2px
           - padding: 10px 12px 8px
-          - background: linear-gradient(145deg, rgba(8, 52, 66, 0.52), rgba(24, 86, 54, 0.46))
-          - border: 1px solid rgba(126, 207, 226, 0.42)
+          - background: linear-gradient(145deg, rgba(40, 130, 60, 0.88), rgba(55, 160, 75, 0.84))
+          - border: 1px solid rgba(120, 220, 80, 0.90)
         grid:
           - grid-template-areas: '"temps"'
           - grid-template-columns: 1fr
@@ -638,8 +642,8 @@ card:
           min-width: 0;
           padding: 6px 8px;
           border-radius: 10px;
-          background: linear-gradient(145deg, rgba(6, 34, 48, 0.72), rgba(18, 62, 44, 0.68));
-          border: 1px solid rgba(126, 207, 226, 0.40);
+          background: linear-gradient(145deg, rgba(35, 115, 55, 0.92), rgba(55, 150, 75, 0.88));
+          border: 1px solid rgba(140, 230, 90, 0.85);
         }
         .ibep-temp-dot {
           width: 7px;
@@ -649,11 +653,11 @@ card:
           box-shadow: 0 0 6px rgba(255,255,255,0.35);
         }
         .ibep-temp-label {
-          color: #7ECFE2;
+          color: #d0f8e8;
           font-size: 0.68rem;
-          font-weight: 500;
+          font-weight: 600;
           letter-spacing: 0.02em;
-          text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+          text-shadow: 0 1px 2px rgba(0,0,0,0.4);
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
@@ -661,10 +665,10 @@ card:
           text-align: center;
         }
         .ibep-temp-value {
-          color: #ffffff;
+          color: #f0fff4;
           font-size: 0.78rem;
           font-weight: 700;
-          text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+          text-shadow: 0 1px 3px rgba(0,0,0,0.35);
           width: 100%;
           text-align: center;
         }
@@ -736,23 +740,23 @@ card:
                   - background: >
                       [[[
                         return entity?.state === 'on'
-                          ? 'linear-gradient(145deg, rgba(78, 118, 20, 0.78), rgba(56, 86, 16, 0.76))'
-                          : 'linear-gradient(145deg, rgba(18, 60, 74, 0.76), rgba(14, 44, 58, 0.74))';
+                          ? 'linear-gradient(145deg, rgba(52, 138, 24, 0.92), rgba(36, 108, 16, 0.90))'
+                          : 'linear-gradient(145deg, rgba(16, 50, 24, 0.90), rgba(12, 38, 18, 0.88))';
                       ]]]
                   - border: >
                       [[[
                         return entity?.state === 'on'
-                          ? '1px solid rgba(161, 210, 28, 0.78)'
-                          : '1px solid rgba(126, 207, 226, 0.52)';
+                          ? '1px solid rgba(120, 220, 20, 0.86)'
+                          : '1px solid rgba(0, 210, 255, 0.46)';
                       ]]]
                   - box-shadow: >
                       [[[
                         return entity?.state === 'on'
-                          ? '0 0 12px rgba(161, 210, 28, 0.26), inset 0 0 18px rgba(161,210,28,0.14)'
+                          ? '0 0 14px rgba(120, 220, 20, 0.34), inset 0 0 20px rgba(120,220,20,0.18)'
                           : 'none';
                       ]]]
                 name:
-                  - color: '#7ECFE2'
+                  - color: '#60CFFF'
                   - font-size: 0.80rem
                   - font-weight: 600
                   - letter-spacing: 0.02em
@@ -865,11 +869,11 @@ card:
                         const managerOn = managerObj?.state === 'on';
                         const manual = String(entity?.state ?? '').toUpperCase().startsWith('MAN');
                         if (!managerOn) {
-                          return 'linear-gradient(145deg, rgba(76, 62, 24, 0.66), rgba(58, 48, 18, 0.64))';
+                          return 'linear-gradient(145deg, rgba(28, 24, 12, 0.72), rgba(20, 18, 8, 0.70))';
                         }
                         return manual
-                          ? 'linear-gradient(145deg, rgba(164, 126, 20, 0.84), rgba(122, 88, 10, 0.82))'
-                          : 'linear-gradient(145deg, rgba(128, 98, 20, 0.74), rgba(94, 72, 14, 0.72))';
+                          ? 'linear-gradient(145deg, rgba(160, 110, 0, 0.90), rgba(120, 78, 0, 0.88))'
+                          : 'linear-gradient(145deg, rgba(110, 78, 0, 0.78), rgba(78, 56, 0, 0.76))';
                       ]]]
                   - border: >
                       [[[
@@ -881,12 +885,12 @@ card:
                           states['switch.switch_on_off_' + base];
                         const managerOn = managerObj?.state === 'on';
                         if (!managerOn) {
-                          return '1px solid rgba(186, 164, 94, 0.44)';
+                          return '1px solid rgba(200, 170, 60, 0.30)';
                         }
                         const manual = String(entity?.state ?? '').toUpperCase().startsWith('MAN');
                         return manual
-                          ? '1px solid rgba(255, 220, 88, 0.86)'
-                          : '1px solid rgba(232, 196, 84, 0.74)';
+                          ? '1px solid rgba(255, 195, 0, 0.92)'
+                          : '1px solid rgba(220, 165, 0, 0.68)';
                       ]]]
                   - box-shadow: >
                       [[[
@@ -900,8 +904,8 @@ card:
                         if (!managerOn) return 'none';
                         const manual = String(entity?.state ?? '').toUpperCase().startsWith('MAN');
                         return manual
-                          ? '0 0 14px rgba(255, 210, 40, 0.34), inset 0 0 16px rgba(255,205,15,0.16)'
-                          : '0 0 8px rgba(220, 180, 52, 0.20), inset 0 0 12px rgba(220,180,52,0.08)';
+                          ? '0 0 16px rgba(255, 185, 0, 0.42), inset 0 0 18px rgba(255,185,0,0.20)'
+                          : '0 0 8px rgba(200, 155, 0, 0.22), inset 0 0 12px rgba(200,155,0,0.10)';
                       ]]]
                   - opacity: >
                       [[[
@@ -924,7 +928,7 @@ card:
                         return managerObj?.state === 'on' ? 'auto' : 'none';
                       ]]]
                 name:
-                  - color: '#7ECFE2'
+                  - color: '#60CFFF'
                   - font-size: 0.80rem
                   - font-weight: 600
                   - letter-spacing: 0.02em
@@ -1099,8 +1103,8 @@ card:
                 - pointer-events: auto
           extra_styles: |
             .ibep-slider-wrap {
-              --ibep-fill: #79BC1C;
-              --ibep-track: rgba(121, 188, 28, 0.30);
+              --ibep-fill: #78DC14;
+              --ibep-track: rgba(120, 220, 20, 0.28);
               position: relative;
               width: 100%;
               height: 30px;
@@ -1110,8 +1114,8 @@ card:
               pointer-events: auto;
             }
             .ibep-slider-wrap.is-disabled {
-              --ibep-fill: rgba(121, 188, 28, 0.62);
-              --ibep-track: rgba(121, 188, 28, 0.18);
+              --ibep-fill: rgba(120, 220, 20, 0.55);
+              --ibep-track: rgba(120, 220, 20, 0.15);
             }
             .ibep-slider-input {
               -webkit-appearance: none;
@@ -1123,7 +1127,7 @@ card:
               outline: none;
               background: transparent;
               cursor: pointer;
-              accent-color: #79BC1C;
+              accent-color: #78DC14;
               pointer-events: auto;
               touch-action: pan-y;
             }
@@ -1203,7 +1207,7 @@ card:
               width: 100%;
               height: 30px;
               border-radius: 12px;
-              background: rgba(121, 188, 28, 0.16);
+              background: rgba(120, 220, 20, 0.14);
               color: #ffffff;
               font-size: 0.72rem;
             }
