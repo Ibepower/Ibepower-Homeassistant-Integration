@@ -4,6 +4,7 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.entity import EntityCategory
 from .const import DOMAIN
+from .entity_naming import build_suggested_object_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -251,6 +252,7 @@ class IBEPlugSensor(CoordinatorEntity, SensorEntity):
         self._device = device
         self._base_name = name
         self._name = self._generate_name()
+        self._attr_suggested_object_id = build_suggested_object_id(device.description, field)
         self._unit = unit
         self._icon = icon
         self._field = field
@@ -342,6 +344,7 @@ class IBEDivSensor(CoordinatorEntity, SensorEntity):
         self._device = device
         self._base_name = name
         self._name = self._generate_name()
+        self._attr_suggested_object_id = build_suggested_object_id(device.description, field)
         self._unit = unit
         self._icon = icon
         self._unique_id = unique_id
@@ -436,6 +439,7 @@ class IBEMeterSensor(CoordinatorEntity, SensorEntity):
         self._device = device
         self._base_name = name
         self._name = self._generate_name()
+        self._attr_suggested_object_id = build_suggested_object_id(device.description, field)
         self._unit = unit
         self._icon = icon
         self._unique_id = unique_id

@@ -3,6 +3,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.components.number import NumberEntity
 
 from .const import DOMAIN
+from .entity_naming import build_suggested_object_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,6 +51,7 @@ class IBEDivManualSlider(CoordinatorEntity, NumberEntity):
         super().__init__(coordinator)
         self._device = device
         self._attr_name = self._generate_name()
+        self._attr_suggested_object_id = build_suggested_object_id(device.description, "manual")
         self._attr_native_min_value = 0
         self._attr_native_max_value = 100
         self._attr_native_step = 1
@@ -101,6 +103,7 @@ class IBEDivBrightnessSlider(CoordinatorEntity, NumberEntity):
         super().__init__(coordinator)
         self._device = device
         self._attr_name = self._generate_name()
+        self._attr_suggested_object_id = build_suggested_object_id(device.description, "brightness")
         self._attr_native_min_value = 0
         self._attr_native_max_value = 100
         self._attr_native_step = 1
@@ -156,6 +159,7 @@ class IBEMeterBrightnessSlider(CoordinatorEntity, NumberEntity):
         super().__init__(coordinator)
         self._device = device
         self._attr_name = self._generate_name()
+        self._attr_suggested_object_id = build_suggested_object_id(device.description, "brightness")
         self._attr_native_min_value = 0
         self._attr_native_max_value = 100
         self._attr_native_step = 1

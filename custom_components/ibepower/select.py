@@ -2,6 +2,7 @@ import logging
 from homeassistant.components.select import SelectEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
+from .entity_naming import build_suggested_object_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class IBEDivSelect(CoordinatorEntity, SelectEntity):
         self._attr_options = ["AUTO", "MANUAL"]
         self._attr_current_option = self.get_current_option()
         self._name = self._generate_name()
+        self._attr_suggested_object_id = build_suggested_object_id(device.description, "modo_de_trabajo")
 
     @property
     def name(self):
@@ -88,7 +90,6 @@ class IBEDivSelect(CoordinatorEntity, SelectEntity):
 
     def _generate_name(self):
         return f"Modo de trabajo ({self._device.description})"
-        #return "Modo de trabajo"
     
     async def async_select_option(self, option: str):
         _LOGGER.debug("async_select_option called with option: %s", option)

@@ -2,15 +2,68 @@ import logging
 from datetime import timedelta
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from .const import DOMAIN
 from .ibeplug_device import IBEPlugDevice
 from .ibediv_device import IBEDivDevice
 from .ibemeter_device import IBEMeterDevice
+from .entity_naming import get_device_slug, get_object_suffix_from_unique_id
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["switch", "sensor", "select", "number", "button"]
+
+
+async def _async_migrate_entity_ids(hass: HomeAssistant, entry: ConfigEntry):
+    """Migrate entity IDs to <domain>.<device_slug>_<entity_suffix> format."""
+    mac = entry.data.get("mac")
+    if not mac:
+        return
+
+    device_slug = get_device_slug(entry.data.get("description"))
+    registry = er.async_get(hass)
+    registry_entries = er.async_entries_for_config_entry(registry, entry.entry_id)
+
+    for registry_entry in registry_entries:
+        suffix = get_object_suffix_from_unique_id(
+            unique_id=registry_entry.unique_id,
+            mac=mac,
+            domain=registry_entry.domain,
+        )
+        if not suffix:
+            continue
+
+        new_entity_id = f"{registry_entry.domain}.{device_slug}_{suffix}"
+        if registry_entry.entity_id == new_entity_id:
+            continue
+
+        existing_target = registry.async_get(new_entity_id)
+        if existing_target and existing_target.id != registry_entry.id:
+            _LOGGER.warning(
+                "No se puede migrar %s a %s porque ya existe",
+                registry_entry.entity_id,
+                new_entity_id,
+            )
+            continue
+
+        try:
+            registry.async_update_entity(
+                registry_entry.entity_id,
+                new_entity_id=new_entity_id,
+            )
+            _LOGGER.info(
+                "Entidad migrada: %s -> %s",
+                registry_entry.entity_id,
+                new_entity_id,
+            )
+        except ValueError as err:
+            _LOGGER.warning(
+                "Error migrando %s -> %s: %s",
+                registry_entry.entity_id,
+                new_entity_id,
+                err,
+            )
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     host = entry.data["host"]
@@ -48,6 +101,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         "coordinator": coordinator,
         "entities": {},
     }
+
+    await _async_migrate_entity_ids(hass, entry)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

@@ -3,6 +3,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
+from .entity_naming import build_suggested_object_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,6 +54,7 @@ class IBEPlugSwitch(CoordinatorEntity, SwitchEntity):
         super().__init__(coordinator)
         self._device = device
         self._attr_name = self._generate_name()
+        self._attr_suggested_object_id = build_suggested_object_id(device.description, "ibeplug")
 
     @property
     def name(self):
@@ -117,6 +119,7 @@ class IBEDivSwitchOnOff(CoordinatorEntity, SwitchEntity):
         super().__init__(coordinator)
         self._device = device
         self._attr_name = self._generate_name()
+        self._attr_suggested_object_id = build_suggested_object_id(device.description, "ibediv")
 
     @property
     def name(self):
@@ -180,6 +183,7 @@ class IBEDivScreenSwitch(CoordinatorEntity, SwitchEntity):
         super().__init__(coordinator)
         self._device = device
         self._attr_name = self._generate_name()
+        self._attr_suggested_object_id = build_suggested_object_id(device.description, "screen")
 
     @property
     def name(self):
@@ -236,6 +240,7 @@ class IBEMeterScreenSwitch(CoordinatorEntity, SwitchEntity):
         super().__init__(coordinator)
         self._device = device
         self._attr_name = self._generate_name()
+        self._attr_suggested_object_id = build_suggested_object_id(device.description, "screen")
 
     @property
     def name(self):
