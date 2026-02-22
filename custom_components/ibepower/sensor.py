@@ -68,7 +68,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             "hW": {"name": "Output Watts", "unit": "W", "icon": "mdi:water-boiler", "field": "calculated_watts", "visible": True, "device_class": "power", "state_class": "measurement"},
             "wMN": {"name": "Work Mode Name", "unit": None, "icon": "mdi:information", "field": "work_mode_name", "visible": False, "device_class": None, "state_class": None},
             "mMN": {"name": "Master Mode Name", "unit": None, "icon": "mdi:account-supervisor", "field": "master_mode_name", "visible": False, "device_class": None, "state_class": None},
-            "tSD": {"name": "Temperature Shutdown", "unit": None, "icon": "mdi:thermometer-alert", "field": "temp_shutdown", "visible": False, "device_class": "temperature", "state_class": "measurement"},
+            "tSD": {"name": "Temperature Shutdown", "unit": None, "icon": "mdi:thermometer-alert", "field": "temp_shutdown", "visible": False, "device_class": None, "state_class": None},
             "cT": {"name": "Chip Temperature", "unit": "°C", "icon": "mdi:thermometer", "field": "chip_temperature", "visible": False, "device_class": "temperature", "state_class": "measurement"},
             "lRST": {"name": "Last Restart Time", "unit": None, "icon": "mdi:restart", "field": "last_restart", "visible": True, "device_class": "timestamp", "state_class": None, "entity_category": EntityCategory.DIAGNOSTIC},
 
@@ -98,8 +98,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             "tT": {"name": "Thermo Temperature", "unit": "°C", "icon": "mdi:water-thermometer", "field": "thermo_temperature", "visible": False, "device_class": "temperature", "state_class": "measurement"},
             "tI": {"name": "Ibepower Temperature", "unit": "°C", "icon": "mdi:thermometer", "field": "ibepower_temperature", "visible": False, "device_class": "temperature", "state_class": "measurement"},
             "tC": {"name": "Custom Temperature", "unit": "°C", "icon": "mdi:thermometer", "field": "custom_temperature", "visible": False, "device_class": "temperature", "state_class": "measurement"},
-            "tTN": {"name": "Thermo Sensor Name", "unit": None, "icon": "mdi:thermometer", "field": "thermo_sensor_name", "visible": False, "device_class": "temperature", "state_class": "measurement"},
-            "tCN": {"name": "Custom Sensor Name", "unit": None, "icon": "mdi:thermometer", "field": "custom_sensor_name", "visible": False, "device_class": "temperature", "state_class": "measurement"},
+            "tTN": {"name": "Thermo Sensor Name", "unit": None, "icon": "mdi:thermometer", "field": "thermo_sensor_name", "visible": False, "device_class": None, "state_class": None},
+            "tCN": {"name": "Custom Sensor Name", "unit": None, "icon": "mdi:thermometer", "field": "custom_sensor_name", "visible": False, "device_class": None, "state_class": None},
 
             # Energía: diverter, importación, exportación
             "KwDT": {"name": "Kw Diverter Today", "unit": "kWh", "icon": "mdi:transmission-tower-export", "field": "kw_diverter_today", "visible": False, "device_class": "energy", "state_class": "total"},
@@ -302,6 +302,9 @@ class IBEPlugSensor(CoordinatorEntity, SensorEntity):
     def native_value(self):
         raw = getattr(self._device, self._field, None)
 
+        if raw == "null":
+            return None
+
         if self._field == "last_restart" and raw:
             raw = IBEPlugSensor.process_field_value(self._field, raw)
 
@@ -393,6 +396,9 @@ class IBEDivSensor(CoordinatorEntity, SensorEntity):
     def native_value(self):
         raw = getattr(self._device, self._field, None)
 
+        if raw == "null":
+            return None
+
         if self._field == "last_restart" and raw:
             raw = IBEDivSensor.process_field_value(self._field, raw)
 
@@ -483,6 +489,9 @@ class IBEMeterSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         raw = getattr(self._device, self._field, None)
+
+        if raw == "null":
+            return None
 
         if self._field == "last_restart" and raw:
             raw = IBEDivSensor.process_field_value(self._field, raw)
