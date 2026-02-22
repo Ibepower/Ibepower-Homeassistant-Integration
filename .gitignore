@@ -1,0 +1,7 @@
+# Python bytecode/cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary compiled artifacts (e.g. cpython-314.pyc.123456789)
+*.pyc.*
