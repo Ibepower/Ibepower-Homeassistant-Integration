@@ -1,7 +1,7 @@
 import logging
 from homeassistant.components.button import ButtonEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.helpers.entity import EntityCategory, DeviceInfo
+from homeassistant.helpers.entity import EntityCategory
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -11,14 +11,14 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     device = data["device"]
     device_type = config_entry.data["device_type"]
     coordinator = data.get("coordinator")
-
-    if DOMAIN not in hass.data:
-        hass.data[DOMAIN] = {}
+    entry_entities = data.setdefault("entities", {})
 
     buttons = [
         RebootDeviceButton(coordinator, device, device_type),
         UpdateFirmwareButton(coordinator, device, device_type),
     ]
+    for button in buttons:
+        entry_entities[button.unique_id] = button
 
     async_add_entities(buttons)
 
@@ -49,7 +49,7 @@ class RebootDeviceButton(CoordinatorEntity, ButtonEntity):
         }
 
     def update_name(self):
-        self._device.name = self._generate_name()
+        self._attr_name = self._generate_name()
         self.async_write_ha_state()
 
     def _generate_name(self):
@@ -86,7 +86,7 @@ class UpdateFirmwareButton(CoordinatorEntity, ButtonEntity):
         return self._attr_name
     
     def update_name(self):
-        self._device.name = self._generate_name()
+        self._attr_name = self._generate_name()
         self.async_write_ha_state()
 
     def _generate_name(self):

@@ -5,6 +5,7 @@ import json
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=10)
 
 class IBEMeterDevice:
     def __init__(self, hass, host, name, mac, version, description):
@@ -103,7 +104,7 @@ class IBEMeterDevice:
 
     async def async_init_session(self):
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
+            self._session = aiohttp.ClientSession(timeout=REQUEST_TIMEOUT)
 
     async def async_close_session(self):
         if self._session is not None:
@@ -114,7 +115,7 @@ class IBEMeterDevice:
         await self.async_init_session()
         url = f"http://{self._host}:{self._port}/cmnd?cmnd={{\"command\":\"Status\"}}"
         try:
-            async with self._session.get(url) as response:
+            async with self._session.get(url, timeout=REQUEST_TIMEOUT) as response:
                 if response.status != 200:
                     _LOGGER.error(f"Error al obtener los datos del dispositivo {self._name}: {response.status}")
                     return
@@ -161,7 +162,7 @@ class IBEMeterDevice:
                 self.kw_solar_total = self.device_data.get("KwSTT")
                 self.last_restart = self.device_data.get("lRST")
 
-        except aiohttp.ClientError as error:
+        except (aiohttp.ClientError, TimeoutError) as error:
             _LOGGER.error(f"Error de conexión al dispositivo {self._name}: {error}")
 
     async def async_turn_on_screen(self):
@@ -180,14 +181,14 @@ class IBEMeterDevice:
         await self.async_init_session()
         url = f"http://{self._host}:{self._port}/cmnd?cmnd={{\"command\":\"{command}\",\"payload\":\"{value}\"}}"
         try:
-            async with self._session.get(url) as response:
+            async with self._session.get(url, timeout=REQUEST_TIMEOUT) as response:
                 if response.status != 200:
                     _LOGGER.error(f"Error al enviar el comando {command} al dispositivo {self._name}: {response.status}")
                     return None
                 data = await response.json()
                 _LOGGER.debug(f"Comando {command} enviado con éxito, respuesta: {data}")
                 return data
-        except aiohttp.ClientError as error:
+        except (aiohttp.ClientError, TimeoutError) as error:
             _LOGGER.error(f"Error de conexión al enviar el comando {command} al dispositivo {self._name}: {error}")
             return None
 
@@ -196,7 +197,7 @@ class IBEMeterDevice:
         update_endpoint = "https://www.ibepower.com/firmware/version_IBEMETER"
         await self.async_init_session()
         try:
-            async with self._session.get(update_endpoint) as response:
+            async with self._session.get(update_endpoint, timeout=REQUEST_TIMEOUT) as response:
                 if response.status == 200:
                     text = await response.text()
                     data = json.loads(text)

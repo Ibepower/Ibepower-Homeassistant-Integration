@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime
-import re
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.entity import EntityCategory
@@ -13,11 +12,9 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     device = data["device"]
     device_type = config_entry.data["device_type"]
     coordinator = data.get("coordinator")
+    entry_entities = data.setdefault("entities", {})
 
     entities = []
-
-    if DOMAIN not in hass.data:
-        hass.data[DOMAIN] = {}
 
     if device_type == "Ibeplug":
 
@@ -54,7 +51,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                             sensor_ibeplug_entity.icon,
                             sensor_info["field"])
 
-            hass.data[DOMAIN][sensor_ibeplug_entity.unique_id] = sensor_ibeplug_entity
+            entry_entities[sensor_ibeplug_entity.unique_id] = sensor_ibeplug_entity
 
     elif device_type == "Ibediv":
         _LOGGER.debug("Ibediv Device Type: %s", device_type)
@@ -94,7 +91,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             "p2W": {"name": "PV2 Power", "unit": "W", "icon": "mdi:solar-power", "field": "pv2_power", "visible": False, "device_class": "power", "state_class": "measurement"},
 
             # Datos de temperatura
-            "iTmp": {"name": "Inverter Temperature", "unit": "°C", "icon": "mdi:sun-thermometer", "field": "internal_temperature", "visible": False, "device_class": "temperature", "state_class": "measurement"},
+            "iTmp": {"name": "Inverter Temperature", "unit": "°C", "icon": "mdi:sun-thermometer", "field": "inverter_temperature", "visible": False, "device_class": "temperature", "state_class": "measurement"},
             "tT": {"name": "Thermo Temperature", "unit": "°C", "icon": "mdi:water-thermometer", "field": "thermo_temperature", "visible": False, "device_class": "temperature", "state_class": "measurement"},
             "tI": {"name": "Ibepower Temperature", "unit": "°C", "icon": "mdi:thermometer", "field": "ibepower_temperature", "visible": False, "device_class": "temperature", "state_class": "measurement"},
             "tC": {"name": "Custom Temperature", "unit": "°C", "icon": "mdi:thermometer", "field": "custom_temperature", "visible": False, "device_class": "temperature", "state_class": "measurement"},
@@ -165,7 +162,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                                 sensor_info["visible"])
 
 
-                hass.data[DOMAIN][sensor_ibediv_entity.unique_id] = sensor_ibediv_entity
+                entry_entities[sensor_ibediv_entity.unique_id] = sensor_ibediv_entity
         
     elif device_type == "Ibemeter":
         _LOGGER.debug("Ibemeter Device Type: %s", device_type)
@@ -214,7 +211,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
         for field, sensor_info in sensor_definitions_ibemeter.items():
             if field in device.device_data:
-                sensor_ibemeter_entity = IBEDivSensor(
+                sensor_ibemeter_entity = IBEMeterSensor(
                         coordinator=coordinator,
                         device = device,
                         name=sensor_info.get("name", None),
@@ -239,7 +236,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                                 sensor_info["visible"])
 
 
-                hass.data[DOMAIN][sensor_ibemeter_entity.unique_id] = sensor_ibemeter_entity
+                entry_entities[sensor_ibemeter_entity.unique_id] = sensor_ibemeter_entity
 
 
     async_add_entities(entities)
@@ -400,7 +397,7 @@ class IBEDivSensor(CoordinatorEntity, SensorEntity):
             return None
 
         if self._field == "last_restart" and raw:
-            raw = IBEDivSensor.process_field_value(self._field, raw)
+            raw = IBEMeterSensor.process_field_value(self._field, raw)
 
         return raw
 
@@ -494,7 +491,7 @@ class IBEMeterSensor(CoordinatorEntity, SensorEntity):
             return None
 
         if self._field == "last_restart" and raw:
-            raw = IBEDivSensor.process_field_value(self._field, raw)
+            raw = IBEMeterSensor.process_field_value(self._field, raw)
 
         return raw
 

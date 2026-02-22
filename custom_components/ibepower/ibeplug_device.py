@@ -5,6 +5,7 @@ import json
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=10)
 
 class IBEPlugDevice:
     def __init__(self, hass, host, name, mac, version, description):
@@ -69,7 +70,7 @@ class IBEPlugDevice:
 
     async def async_init_session(self):
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
+            self._session = aiohttp.ClientSession(timeout=REQUEST_TIMEOUT)
 
     async def async_close_session(self):
         if self._session is not None:
@@ -80,7 +81,7 @@ class IBEPlugDevice:
         await self.async_init_session()
         url = f"http://{self._host}:{self._port}/cm?cmnd=Energy"
         try:
-            async with self._session.get(url) as response:
+            async with self._session.get(url, timeout=REQUEST_TIMEOUT) as response:
                 if response.status != 200:
                     _LOGGER.error(f"Error al obtener los datos del dispositivo {self._name}: {response.status}")
                     return
@@ -97,7 +98,7 @@ class IBEPlugDevice:
                 self.is_on = energy_data.get("Relay") == "ON"
                 self.last_restart = energy_data.get("lRST")
 
-        except aiohttp.ClientError as error:
+        except (aiohttp.ClientError, TimeoutError) as error:
             _LOGGER.error(f"Error de conexión al dispositivo {self._name}: {error}")
 
     async def async_turn_on(self):
@@ -110,14 +111,14 @@ class IBEPlugDevice:
         await self.async_init_session()
         url = f"http://{self._host}:{self._port}/cm?cmnd={command}%20{value}"
         try:
-            async with self._session.get(url) as response:
+            async with self._session.get(url, timeout=REQUEST_TIMEOUT) as response:
                 if response.status != 200:
                     _LOGGER.error(f"Error al enviar el comando {command} al dispositivo {self._name}: {response.status}")
                     return None
                 data = await response.json()
                 _LOGGER.debug(f"Comando {command} enviado con éxito, respuesta: {data}")
                 return data
-        except aiohttp.ClientError as error:
+        except (aiohttp.ClientError, TimeoutError) as error:
             _LOGGER.error(f"Error de conexión al enviar el comando {command} al dispositivo {self._name}: {error}")
             return None
     
@@ -129,7 +130,7 @@ class IBEPlugDevice:
         update_endpoint = "https://www.ibepower.com/firmware/version_IBEPLUG"
         await self.async_init_session()
         try:
-            async with self._session.get(update_endpoint) as response:
+            async with self._session.get(update_endpoint, timeout=REQUEST_TIMEOUT) as response:
                 if response.status == 200:
                     text = await response.text()
                     data = json.loads(text)

@@ -1,28 +1,30 @@
-import logging
-import voluptuous as vol
+﻿import logging
+
 from homeassistant import config_entries
-from homeassistant.core import callback
-from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.entity_registry import async_get
 
 try:
-    # Para HA Core 2026.2 y versiones posteriores
+    # HA Core 2026.2+
     from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 except ImportError:
-    # Para versiones anteriores
+    # Older HA cores
     from homeassistant.components.zeroconf import ZeroconfServiceInfo
-
 
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
 
 class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
-        return self.async_abort(reason="Ibepower Integration is configured via Zeroconf. Please, close this dialog and wait for the device to be discovered.")
+        return self.async_abort(
+            reason=(
+                "Ibepower Integration is configured via Zeroconf. "
+                "Please, close this dialog and wait for the device to be discovered."
+            )
+        )
 
     async def async_step_zeroconf(self, discovery_info: ZeroconfServiceInfo):
         _LOGGER.debug("Dispositivo descubierto via mDNS: %s", discovery_info)
@@ -44,15 +46,20 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         mac = properties.get("mac")
 
         if mac is None:
-            _LOGGER.debug("Dispositivo sin dirección MAC, ignorado.")
+            _LOGGER.debug("Dispositivo sin direccion MAC, ignorado.")
             return self.async_abort(reason="no_mac_address")
 
         name = f"{device_type.capitalize()} ({desc})"
         unique_id = f"{device_type}_{mac}"
-        
-        _LOGGER.debug("[ZEROCONF] Dispositivo encontrado: %s (%s) en %s - unique_id: %s", name, version, host, unique_id)
 
-        # Comprueba si el dispositivo ya está configurado
+        _LOGGER.debug(
+            "[ZEROCONF] Dispositivo encontrado: %s (%s) en %s - unique_id: %s",
+            name,
+            version,
+            host,
+            unique_id,
+        )
+
         existing_entry = await self.async_set_unique_id(unique_id)
         if existing_entry:
             old_host = existing_entry.data.get("host")
@@ -62,62 +69,54 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             any_change = False
 
             if old_host != host:
-                _LOGGER.debug(f"Detectado cambio en el host del dispositivo: {old_host} -> {host}")
+                _LOGGER.debug("Cambio de host detectado: %s -> %s", old_host, host)
                 any_change = True
 
-            # Comprobar si la versión ha cambiado
             if old_version != version:
-                _LOGGER.debug(f"Detectado cambio en la versión del dispositivo: {old_version} -> {version}")
+                _LOGGER.debug("Cambio de version detectado: %s -> %s", old_version, version)
                 any_change = True
 
-            # Comprobar si la descripción ha cambiado
             if old_desc != desc:
-                _LOGGER.debug(f"Detectado cambio en la descripción del dispositivo: {old_desc} -> {desc}")
+                _LOGGER.debug("Cambio de descripcion detectado: %s -> %s", old_desc, desc)
                 any_change = True
 
             if any_change:
                 self.hass.config_entries.async_update_entry(
                     existing_entry,
-                    title = name,
+                    title=name,
                     data={
                         **existing_entry.data,
                         "description": desc,
                         "name": name,
                         "version": version,
                         "host": host,
-                    }
+                    },
                 )
 
                 await self.hass.config_entries.async_reload(existing_entry.entry_id)
 
-                device_info = self.hass.data[DOMAIN].get(existing_entry.entry_id)
-                _LOGGER.debug(f"device_info: {device_info}")
-                if device_info and 'device' in device_info:
-                    device = device_info['device']
+                domain_data = self.hass.data.get(DOMAIN, {})
+                entry_data = domain_data.get(existing_entry.entry_id)
+                _LOGGER.debug("entry_data: %s", entry_data)
+
+                if entry_data and "device" in entry_data:
+                    device = entry_data["device"]
                     device.description = desc
                     device.name = name
                     device.version = version
                     device.host = host
-                    _LOGGER.debug(f"Actualizando valores del dispositivo: {device.name}")
 
-                entity_registry = async_get(self.hass)
-                for entity in entity_registry.entities.values():
-                    if entity.config_entry_id == existing_entry.entry_id:
-                        entity_object = self.hass.data[DOMAIN].get(entity.unique_id)
+                for entity_object in (entry_data or {}).get("entities", {}).values():
+                    if hasattr(entity_object, "update_name"):
+                        entity_object.update_name()
 
-                        if entity_object and hasattr(entity_object, 'update_name'):
-                            _LOGGER.debug(f"Actualizando descripción de la entidad {entity.unique_id} a {entity_object._generate_name()}")
-                            entity_object.update_name()
-                        else:
-                            _LOGGER.debug(f"entity_object no encontrado para {entity.unique_id}")
-                
-                _LOGGER.debug(f"Actualización completada a {desc}")
+                _LOGGER.debug("Actualizacion completada a %s", desc)
 
             return self.async_abort(reason="device_already_configured")
 
         _LOGGER.debug("[ZEROCONF] Creando nuevo dispositivo %s", name)
         return self.async_create_entry(
-            title = name,
+            title=name,
             data={
                 "host": host,
                 "name": name,
@@ -127,3 +126,4 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "description": desc,
             },
         )
+

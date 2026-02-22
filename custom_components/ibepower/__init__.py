@@ -46,6 +46,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     hass.data[DOMAIN][entry.entry_id] = {
         "device": device,
         "coordinator": coordinator,
+        "entities": {},
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -55,5 +56,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
+        domain_data = hass.data.get(DOMAIN, {})
+        entry_data = domain_data.get(entry.entry_id, {})
+        device = entry_data.get("device")
+        if device and hasattr(device, "async_close_session"):
+            await device.async_close_session()
+        domain_data.pop(entry.entry_id, None)
+        if not domain_data:
+            hass.data.pop(DOMAIN, None)
     return unload_ok

@@ -11,6 +11,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     device = data["device"]
     device_type = config_entry.data["device_type"]
     coordinator = data.get("coordinator")
+    entry_entities = data.setdefault("entities", {})
 
     entities = []
 
@@ -20,10 +21,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
         _LOGGER.debug("[SWITCH] Switch Name: %s, Switch Unique ID: %s", switch_entity.name, switch_entity.unique_id)
 
-        if DOMAIN not in hass.data:
-            hass.data[DOMAIN] = {}
-
-        hass.data[DOMAIN][switch_entity.unique_id] = switch_entity
+        entry_entities[switch_entity.unique_id] = switch_entity
 
     elif device_type == "Ibediv":
         div_entity = IBEDivSwitchOnOff(coordinator, device)
@@ -33,11 +31,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         _LOGGER.debug("[SWITCH] Switch Name: %s, Switch Unique ID: %s", div_entity.name, div_entity.unique_id)
         _LOGGER.debug("[SWITCH] Switch Name: %s, Switch Unique ID: %s", screen_entity.name, screen_entity.unique_id)
 
-        if DOMAIN not in hass.data:
-            hass.data[DOMAIN] = {}
-
-        hass.data[DOMAIN][div_entity.unique_id] = div_entity
-        hass.data[DOMAIN][screen_entity.unique_id] = screen_entity
+        entry_entities[div_entity.unique_id] = div_entity
+        entry_entities[screen_entity.unique_id] = screen_entity
     
     elif device_type == "Ibemeter":
         screen_entity = IBEMeterScreenSwitch(coordinator, device)
@@ -45,10 +40,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
         _LOGGER.debug("[SWITCH] Switch Name: %s, Switch Unique ID: %s", screen_entity.name, screen_entity.unique_id)
 
-        if DOMAIN not in hass.data:
-            hass.data[DOMAIN] = {}
-
-        hass.data[DOMAIN][screen_entity.unique_id] = screen_entity
+        entry_entities[screen_entity.unique_id] = screen_entity
 
     async_add_entities(entities)
 
@@ -60,10 +52,11 @@ class IBEPlugSwitch(CoordinatorEntity, SwitchEntity):
     def __init__(self, coordinator, device):
         super().__init__(coordinator)
         self._device = device
+        self._attr_name = self._generate_name()
 
     @property
     def name(self):
-        return self._device.name
+        return self._attr_name
     
     @property
     def unique_id(self):
@@ -90,7 +83,7 @@ class IBEPlugSwitch(CoordinatorEntity, SwitchEntity):
         }
     
     def update_name(self):
-        self._device.name = self._generate_name()
+        self._attr_name = self._generate_name()
         self.async_write_ha_state()
 
     def _generate_name(self):
@@ -127,7 +120,7 @@ class IBEDivSwitchOnOff(CoordinatorEntity, SwitchEntity):
 
     @property
     def name(self):
-        return self._generate_name()
+        return self._attr_name
     
     @property
     def unique_id(self):
@@ -157,7 +150,7 @@ class IBEDivSwitchOnOff(CoordinatorEntity, SwitchEntity):
         }
     
     def update_name(self):
-        self._device.name = self._generate_name()
+        self._attr_name = self._generate_name()
         self.async_write_ha_state()
 
     def _generate_name(self):
@@ -190,7 +183,7 @@ class IBEDivScreenSwitch(CoordinatorEntity, SwitchEntity):
 
     @property
     def name(self):
-        return self._generate_name()
+        return self._attr_name
     
     @property
     def unique_id(self):
@@ -217,7 +210,7 @@ class IBEDivScreenSwitch(CoordinatorEntity, SwitchEntity):
         }
     
     def update_name(self):
-        self._device.name = self._generate_name()
+        self._attr_name = self._generate_name()
         self.async_write_ha_state()
 
     def _generate_name(self):
@@ -246,7 +239,7 @@ class IBEMeterScreenSwitch(CoordinatorEntity, SwitchEntity):
 
     @property
     def name(self):
-        return self._generate_name()
+        return self._attr_name
     
     @property
     def unique_id(self):
@@ -273,7 +266,7 @@ class IBEMeterScreenSwitch(CoordinatorEntity, SwitchEntity):
         }
     
     def update_name(self):
-        self._device.name = self._generate_name()
+        self._attr_name = self._generate_name()
         self.async_write_ha_state()
 
     def _generate_name(self):

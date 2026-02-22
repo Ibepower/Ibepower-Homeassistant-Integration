@@ -10,6 +10,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     device = data["device"]
     device_type = config_entry.data["device_type"]
     coordinator = data.get("coordinator")
+    entry_entities = data.setdefault("entities", {})
 
     entities = []
 
@@ -21,10 +22,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
         _LOGGER.debug("[SELECT] Select Name: %s, Select Unique ID: %s", div_entity.name, div_entity.unique_id)
 
-        if DOMAIN not in hass.data:
-            hass.data[DOMAIN] = {}
-
-        hass.data[DOMAIN][div_entity.unique_id] = div_entity
+        entry_entities[div_entity.unique_id] = div_entity
 
     async_add_entities(entities)
 

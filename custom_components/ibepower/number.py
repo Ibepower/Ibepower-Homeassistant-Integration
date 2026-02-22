@@ -11,6 +11,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     device = data["device"]
     device_type = config_entry.data["device_type"]
     coordinator = data.get("coordinator")
+    entry_entities = data.setdefault("entities", {})
 
     entities = []
 
@@ -24,11 +25,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         _LOGGER.debug("[SLIDER] Slider Name: %s, Slider Unique ID: %s", div_manual_slider._attr_name, div_manual_slider.unique_id)
         _LOGGER.debug("[SLIDER] Slider Name: %s, Slider Unique ID: %s", div_brightness_slider._attr_name, div_brightness_slider.unique_id)
 
-        if DOMAIN not in hass.data:
-            hass.data[DOMAIN] = {}
-
-        hass.data[DOMAIN][div_manual_slider.unique_id] = div_manual_slider
-        hass.data[DOMAIN][div_brightness_slider.unique_id] = div_brightness_slider
+        entry_entities[div_manual_slider.unique_id] = div_manual_slider
+        entry_entities[div_brightness_slider.unique_id] = div_brightness_slider
     
     elif device_type == "Ibemeter":
 
@@ -38,10 +36,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
         _LOGGER.debug("[SLIDER] Slider Name: %s, Slider Unique ID: %s", meter_brightness_slider._attr_name, meter_brightness_slider.unique_id)
 
-        if DOMAIN not in hass.data:
-            hass.data[DOMAIN] = {}
-
-        hass.data[DOMAIN][meter_brightness_slider.unique_id] = meter_brightness_slider
+        entry_entities[meter_brightness_slider.unique_id] = meter_brightness_slider
 
 
     async_add_entities(entities)
@@ -63,7 +58,7 @@ class IBEDivManualSlider(CoordinatorEntity, NumberEntity):
     
     @property
     def name(self):
-        return self._generate_name()
+        return self._attr_name
 
     @property
     def unique_id(self):
@@ -79,7 +74,7 @@ class IBEDivManualSlider(CoordinatorEntity, NumberEntity):
 
     async def async_set_native_value(self, value: int):
         await self._device.async_set_pwm_value(value)
-        self._attr_value = value
+        self._attr_native_value = value
         self.async_write_ha_state()
 
     @property
@@ -95,7 +90,7 @@ class IBEDivManualSlider(CoordinatorEntity, NumberEntity):
         }
     
     def update_name(self):
-        self._name = self._generate_name()
+        self._attr_name = self._generate_name()
         self.async_write_ha_state()
 
     def _generate_name(self):
@@ -114,7 +109,7 @@ class IBEDivBrightnessSlider(CoordinatorEntity, NumberEntity):
     
     @property
     def name(self):
-        return self._generate_name()
+        return self._attr_name
 
     @property
     def unique_id(self):
@@ -130,7 +125,7 @@ class IBEDivBrightnessSlider(CoordinatorEntity, NumberEntity):
 
     async def async_set_native_value(self, value: int):
         await self._device.async_set_brightness_value(value)
-        self._attr_value = value
+        self._attr_native_value = value
         self.async_write_ha_state()
 
     @property
@@ -146,7 +141,7 @@ class IBEDivBrightnessSlider(CoordinatorEntity, NumberEntity):
         }
     
     def update_name(self):
-        self._name = self._generate_name()
+        self._attr_name = self._generate_name()
         self.async_write_ha_state()
 
     def _generate_name(self):
@@ -169,7 +164,7 @@ class IBEMeterBrightnessSlider(CoordinatorEntity, NumberEntity):
     
     @property
     def name(self):
-        return self._generate_name()
+        return self._attr_name
 
     @property
     def unique_id(self):
@@ -185,7 +180,7 @@ class IBEMeterBrightnessSlider(CoordinatorEntity, NumberEntity):
 
     async def async_set_native_value(self, value: int):
         await self._device.async_set_brightness_value(value)
-        self._attr_value = value
+        self._attr_native_value = value
         self.async_write_ha_state()
 
     @property
@@ -201,7 +196,7 @@ class IBEMeterBrightnessSlider(CoordinatorEntity, NumberEntity):
         }
     
     def update_name(self):
-        self._name = self._generate_name()
+        self._attr_name = self._generate_name()
         self.async_write_ha_state()
 
     def _generate_name(self):
