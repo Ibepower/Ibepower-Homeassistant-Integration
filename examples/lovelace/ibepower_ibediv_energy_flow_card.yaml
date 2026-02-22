@@ -17,6 +17,26 @@ variables:
   - "'test_no_usar'"
   - "'/ibepower_static/ibepower_logo.png'"
 entities:
+  - ${'sensor.' + vars[0] + '_solar_watts'}
+  - ${'sensor.solar_watts_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_grid_watts'}
+  - ${'sensor.grid_watts_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_load_watts'}
+  - ${'sensor.load_watts_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_battery_power'}
+  - ${'sensor.battery_power_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_battery_soc'}
+  - ${'sensor.battery_soc_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_calculated_watts'}
+  - ${'sensor.calculated_watts_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_kw_solar_today'}
+  - ${'sensor.kw_solar_today_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_kw_import_today'}
+  - ${'sensor.kw_import_today_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_kw_export_today'}
+  - ${'sensor.kw_export_today_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_kw_diverter_today'}
+  - ${'sensor.kw_diverter_today_' + vars[0]}
   - ${'switch.' + vars[0] + '_ibediv'}
   - ${'switch.ibediv_' + vars[0]}
   - ${'switch.' + vars[0] + '_switch_on_off'}
@@ -33,7 +53,7 @@ card:
   type: vertical-stack
   cards:
     - type: custom:button-card
-      entity: ${'sensor.' + vars[0] + '_calculated_watts'}
+      entity: "${((states['sensor.' + vars[0] + '_calculated_watts']) && ('sensor.' + vars[0] + '_calculated_watts')) || ('sensor.calculated_watts_' + vars[0])}"
       name: "${('' + vars[0]).toUpperCase()}"
       show_icon: false
       show_state: false
@@ -41,27 +61,7 @@ card:
       variables:
         base: ${vars[0]}
         logo_src: ${vars[1]}
-      triggers_update:
-        - ${'sensor.' + vars[0] + '_solar_watts'}
-        - ${'sensor.solar_watts_' + vars[0]}
-        - ${'sensor.' + vars[0] + '_grid_watts'}
-        - ${'sensor.grid_watts_' + vars[0]}
-        - ${'sensor.' + vars[0] + '_load_watts'}
-        - ${'sensor.load_watts_' + vars[0]}
-        - ${'sensor.' + vars[0] + '_battery_power'}
-        - ${'sensor.battery_power_' + vars[0]}
-        - ${'sensor.' + vars[0] + '_battery_soc'}
-        - ${'sensor.battery_soc_' + vars[0]}
-        - ${'sensor.' + vars[0] + '_calculated_watts'}
-        - ${'sensor.calculated_watts_' + vars[0]}
-        - ${'sensor.' + vars[0] + '_kw_solar_today'}
-        - ${'sensor.kw_solar_today_' + vars[0]}
-        - ${'sensor.' + vars[0] + '_kw_import_today'}
-        - ${'sensor.kw_import_today_' + vars[0]}
-        - ${'sensor.' + vars[0] + '_kw_export_today'}
-        - ${'sensor.kw_export_today_' + vars[0]}
-        - ${'sensor.' + vars[0] + '_kw_diverter_today'}
-        - ${'sensor.kw_diverter_today_' + vars[0]}
+      triggers_update: all
       custom_fields:
         logo: >
           [[[
