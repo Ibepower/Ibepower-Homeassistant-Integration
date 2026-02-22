@@ -160,22 +160,28 @@ class IBEDivSwitchOnOff(CoordinatorEntity, SwitchEntity):
         return f"Ibediv ({self._device.description})"
 
     async def async_turn_on(self):
-        response = await self._device.async_turn_on_diverter()
-        if response and response.get("pwm") == "ON":
-            self._device.diverter_is_on = True
-        else:
-            self._device.diverter_is_on = False
-
+        previous_state = bool(self._device.diverter_is_on)
+        self._device.diverter_is_on = True
         self.async_write_ha_state()
+        response = await self._device.async_turn_on_diverter()
+        if response is None:
+            self._device.diverter_is_on = previous_state
+            self.async_write_ha_state()
+            return
+        if self.coordinator:
+            await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self):
-        response = await self._device.async_turn_off_diverter()
-        if response and response.get("pwm") == "OFF":
-            self._device.diverter_is_on = False
-        else:
-            self._device.diverter_is_on = True
-
+        previous_state = bool(self._device.diverter_is_on)
+        self._device.diverter_is_on = False
         self.async_write_ha_state()
+        response = await self._device.async_turn_off_diverter()
+        if response is None:
+            self._device.diverter_is_on = previous_state
+            self.async_write_ha_state()
+            return
+        if self.coordinator:
+            await self.coordinator.async_request_refresh()
 
 class IBEDivScreenSwitch(CoordinatorEntity, SwitchEntity):
 

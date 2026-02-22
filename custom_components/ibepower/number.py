@@ -68,16 +68,25 @@ class IBEDivManualSlider(CoordinatorEntity, NumberEntity):
 
     @property
     def native_value(self) -> int | None:
-        return self._device.manualControlPercentage
+        return self._attr_native_value
     
     @property
     def mode(self) -> str:
-        return "auto" # "auto", "slider", "box"
+        return "slider" # "auto", "slider", "box"
 
     async def async_set_native_value(self, value: int):
-        await self._device.async_set_pwm_value(value)
+        value = int(round(value))
+        # Optimistic update so the UI reflects the dragged value immediately.
         self._attr_native_value = value
+        self._device.manualControlPercentage = value
         self.async_write_ha_state()
+        await self._device.async_set_pwm_value(value)
+
+    def _handle_coordinator_update(self) -> None:
+        latest = self._device.manualControlPercentage
+        if latest is not None:
+            self._attr_native_value = int(round(latest))
+        super()._handle_coordinator_update()
 
     @property
     def device_info(self):
@@ -120,16 +129,24 @@ class IBEDivBrightnessSlider(CoordinatorEntity, NumberEntity):
 
     @property
     def native_value(self) -> int | None:
-        return self._device.brightnessPercentage
+        return self._attr_native_value
     
     @property
     def mode(self) -> str:
-        return "auto" # "auto", "slider", "box"
+        return "slider" # "auto", "slider", "box"
 
     async def async_set_native_value(self, value: int):
-        await self._device.async_set_brightness_value(value)
+        value = int(round(value))
         self._attr_native_value = value
+        self._device.brightnessPercentage = value
         self.async_write_ha_state()
+        await self._device.async_set_brightness_value(value)
+
+    def _handle_coordinator_update(self) -> None:
+        latest = self._device.brightnessPercentage
+        if latest is not None:
+            self._attr_native_value = int(round(latest))
+        super()._handle_coordinator_update()
 
     @property
     def device_info(self):
@@ -176,16 +193,24 @@ class IBEMeterBrightnessSlider(CoordinatorEntity, NumberEntity):
 
     @property
     def native_value(self) -> int | None:
-        return self._device.brightnessPercentage
+        return self._attr_native_value
     
     @property
     def mode(self) -> str:
-        return "auto" # "auto", "slider", "box"
+        return "slider" # "auto", "slider", "box"
 
     async def async_set_native_value(self, value: int):
-        await self._device.async_set_brightness_value(value)
+        value = int(round(value))
         self._attr_native_value = value
+        self._device.brightnessPercentage = value
         self.async_write_ha_state()
+        await self._device.async_set_brightness_value(value)
+
+    def _handle_coordinator_update(self) -> None:
+        latest = self._device.brightnessPercentage
+        if latest is not None:
+            self._attr_native_value = int(round(latest))
+        super()._handle_coordinator_update()
 
     @property
     def device_info(self):

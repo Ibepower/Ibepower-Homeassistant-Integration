@@ -118,6 +118,53 @@
 
 ---
 
+## Dashboard Cards (Graphs + Animations)
+
+### Single-device cards by device type (recommended, no summary sensors)
+
+Use one file per device type:
+
+- `examples/lovelace/ibepower_ibeplug_device_card.yaml`
+- `examples/lovelace/ibepower_ibediv_device_card.yaml`
+- `examples/lovelace/ibepower_ibemeter_device_card.yaml`
+- `examples/lovelace/ibepower_ibediv_energy_flow_card.yaml`
+- `examples/lovelace/ibepower_ibemeter_energy_flow_card.yaml`
+
+Requirements (HACS):
+
+- `config-template-card`
+- `button-card`
+- `apexcharts-card`
+
+How to use:
+
+1. Open the file that matches your device type.
+2. Change only the base variable (`variables: - "'<base_slug>'"`) in the card header.
+3. The card resolves entities with your current pattern: `sensor.<base_slug>_<field>`.
+4. Paste into your dashboard view (YAML mode).
+
+Optional tuning:
+
+1. In each card, use `variables.hidden_fields` to hide any sensor field without deleting blocks.
+2. Keep `base_slug` equal to the device name suffix used in your current entities (example: `calentador`).
+
+---
+
+## Entity Naming Convention And Migration
+
+To keep entity naming coherent across platforms (`sensor`, `switch`, `number`, `select`, `button`) and reduce naming drift between old/new installs, follow the canonical convention and migration guide:
+
+- `docs/entity_naming_convention_es.md`
+
+The guide includes:
+
+- Canonical naming rules
+- Legacy-to-canonical entity mapping
+- Steps to preserve history
+- SQL fallback to recover merged history if needed
+
+---
+
 ## Troubleshooting
 
 - **Devices not being discovered**: Ensure your devices are connected to the same network as Home Assistant and that mDNS is enabled on your router.
@@ -168,3 +215,4 @@ For any issues or questions, feel free to open an issue in the GitHub repository
 ---
 
 Made with ❤️ by [Ibepower](https://github.com/Ibepower).
+

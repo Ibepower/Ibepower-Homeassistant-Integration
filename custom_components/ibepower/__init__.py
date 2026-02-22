@@ -1,5 +1,7 @@
 import logging
+from pathlib import Path
 from datetime import timedelta
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -13,6 +15,24 @@ from .entity_naming import get_device_slug, get_object_suffix_from_unique_id
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["switch", "sensor", "select", "number", "button"]
+STATIC_URL_PATH = "/ibepower_static"
+STATIC_DIR_PATH = Path(__file__).resolve().parent / "www"
+STATIC_REGISTERED_KEY = "_static_path_registered"
+
+
+async def _async_register_static_path(hass: HomeAssistant) -> None:
+    """Expose integration bundled assets under /ibepower_static."""
+    if not STATIC_DIR_PATH.exists():
+        return
+
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    if domain_data.get(STATIC_REGISTERED_KEY):
+        return
+
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(STATIC_URL_PATH, str(STATIC_DIR_PATH), cache_headers=False)]
+    )
+    domain_data[STATIC_REGISTERED_KEY] = True
 
 
 async def _async_migrate_entity_ids(hass: HomeAssistant, entry: ConfigEntry):
@@ -66,6 +86,8 @@ async def _async_migrate_entity_ids(hass: HomeAssistant, entry: ConfigEntry):
             )
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+    await _async_register_static_path(hass)
+
     host = entry.data["host"]
     name = entry.data["name"]
     mac = entry.data.get("mac")
@@ -117,6 +139,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
         if device and hasattr(device, "async_close_session"):
             await device.async_close_session()
         domain_data.pop(entry.entry_id, None)
-        if not domain_data:
+        has_active_entries = any(key != STATIC_REGISTERED_KEY for key in domain_data)
+        if not has_active_entries:
             hass.data.pop(DOMAIN, None)
     return unload_ok

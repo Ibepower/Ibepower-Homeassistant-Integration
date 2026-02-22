@@ -94,9 +94,17 @@ class IBEDivSelect(CoordinatorEntity, SelectEntity):
     async def async_select_option(self, option: str):
         _LOGGER.debug("async_select_option called with option: %s", option)
         if option in self._attr_options:
-            await self._device.async_select_work_mode(option)
-            _LOGGER.debug("Option %s sent to device", option)
+            previous_mode = self._device.work_mode
+            self._device.work_mode = "MAN" if option == "MANUAL" else "AUTO"
             self.async_write_ha_state()
+            response = await self._device.async_select_work_mode(option)
+            if response is None:
+                self._device.work_mode = previous_mode
+                self.async_write_ha_state()
+                return
+            _LOGGER.debug("Option %s sent to device", option)
+            if self.coordinator:
+                await self.coordinator.async_request_refresh()
         else:
             _LOGGER.error(
                 "Invalid option selected: %s (valid options: %s)", option, self._attr_options

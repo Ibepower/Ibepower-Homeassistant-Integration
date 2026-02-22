@@ -1,0 +1,1209 @@
+﻿# Ibepower Ibediv energy-flow card (base-name mode)
+#
+# Requirements (HACS):
+# - config-template-card
+# - button-card
+#
+# Use:
+# 1) Change only BASE below (slug):
+#    variables:
+#      - "'test_no_usar'"
+# 2) Optional: adjust logo path (default bundled by integration):
+#      - "'/ibepower_static/ibepower_logo.png'"
+# 3) Done. The card will resolve entities as: sensor.<BASE>_<field>
+
+type: custom:config-template-card
+variables:
+  - "'test_no_usar'"
+  - "'/ibepower_static/ibepower_logo.png'"
+entities:
+  - ${'switch.' + vars[0] + '_ibediv'}
+  - ${'switch.ibediv_' + vars[0]}
+  - ${'switch.' + vars[0] + '_switch_on_off'}
+  - ${'switch.switch_on_off_' + vars[0]}
+  - ${'select.' + vars[0] + '_modo_de_trabajo'}
+  - ${'select.modo_de_trabajo_' + vars[0]}
+  - ${'select.' + vars[0] + '_work_mode_select'}
+  - ${'select.work_mode_select_' + vars[0]}
+  - ${'number.' + vars[0] + '_manual'}
+  - ${'number.manual_' + vars[0]}
+  - ${'number.' + vars[0] + '_pwm_value_setter'}
+  - ${'number.pwm_value_setter_' + vars[0]}
+card:
+  type: vertical-stack
+  cards:
+    - type: custom:button-card
+      entity: ${'sensor.' + vars[0] + '_calculated_watts'}
+      name: "${('' + vars[0]).toUpperCase()}"
+      show_icon: false
+      show_state: false
+      show_label: false
+      variables:
+        base: ${vars[0]}
+        logo_src: ${vars[1]}
+      triggers_update:
+        - ${'sensor.' + vars[0] + '_solar_watts'}
+        - ${'sensor.solar_watts_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_grid_watts'}
+        - ${'sensor.grid_watts_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_load_watts'}
+        - ${'sensor.load_watts_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_battery_power'}
+        - ${'sensor.battery_power_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_battery_soc'}
+        - ${'sensor.battery_soc_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_calculated_watts'}
+        - ${'sensor.calculated_watts_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_kw_solar_today'}
+        - ${'sensor.kw_solar_today_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_kw_import_today'}
+        - ${'sensor.kw_import_today_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_kw_export_today'}
+        - ${'sensor.kw_export_today_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_kw_diverter_today'}
+        - ${'sensor.kw_diverter_today_' + vars[0]}
+      custom_fields:
+        logo: >
+          [[[
+            const toUrl = (p) => {
+              if (hass && typeof hass.hassUrl === 'function') return hass.hassUrl(p);
+              return p;
+            };
+            const primary = String(variables.logo_src || '/ibepower_static/ibepower_logo.png');
+            const fallback = '/local/ibepower_logo.png';
+            const src = toUrl(primary);
+            const fallbackSrc = toUrl(fallback);
+            return '<div class="ibep-brand-logo-wrap"><img class="ibep-brand-logo" src="' + src + '" data-fallback="' + fallbackSrc + '" onerror="if(!this.dataset.err){this.dataset.err=\'1\';this.src=this.dataset.fallback;}" alt="Ibepower"></div>';
+          ]]]
+        flow: >
+          [[[
+            const base = variables.base;
+            const getObj = (field) => states['sensor.' + base + '_' + field] || states['sensor.' + field + '_' + base];
+            const getRaw = (field) => getObj(field)?.state;
+            const num = (field) => {
+              const raw = String(getRaw(field) ?? '').replace(',', '.');
+              const v = Number(raw);
+              return Number.isFinite(v) ? v : 0;
+            };
+            const fmtW = (v) => Math.round(Math.abs(v)) + ' W';
+            const fmtK = (v) => Number(v).toFixed(2) + ' kWh';
+    
+            const solarW = num('solar_watts');
+            const gridW = num('grid_watts');
+            const loadW = num('load_watts');
+            const batteryW = num('battery_power');
+            const batterySoc = num('battery_soc');
+            const diverterW = num('calculated_watts');
+    
+            const solarK = num('kw_solar_today');
+            const importK = num('kw_import_today');
+            const exportK = num('kw_export_today');
+            const diverterK = num('kw_diverter_today');
+    
+            const browserLang = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : '';
+            const rawLang = String(
+              hass?.language ||
+              hass?.selectedLanguage ||
+              hass?.locale?.language ||
+              browserLang ||
+              'en'
+            ).toLowerCase();
+            const lang = rawLang.startsWith('es')
+              ? 'es'
+              : rawLang.startsWith('pt')
+                ? 'pt'
+                : rawLang.startsWith('en')
+                  ? 'en'
+                  : 'en';
+            const i18n = {
+              es: {
+                solar: 'Solar',
+                grid: 'Red',
+                home: 'Hogar',
+                battery: 'Bateria',
+                charging: 'Cargando',
+                discharging: 'Descargando',
+                importing: 'Importando',
+                exporting: 'Exportando',
+                imp: 'Imp',
+                exp: 'Exp',
+                diverter: 'Derivando',
+                diverterToday: 'Derivado Hoy'
+              },
+              en: {
+                solar: 'Solar',
+                grid: 'Grid',
+                home: 'Home',
+                battery: 'Battery',
+                charging: 'Charging',
+                discharging: 'Discharging',
+                importing: 'Importing',
+                exporting: 'Exporting',
+                imp: 'Imp',
+                exp: 'Exp',
+                diverter: 'Diverter',
+                diverterToday: 'Diverted Today'
+              },
+              pt: {
+                solar: 'Solar',
+                grid: 'Rede',
+                home: 'Casa',
+                battery: 'Bateria',
+                charging: 'Carregando',
+                discharging: 'Descarregando',
+                importing: 'Importando',
+                exporting: 'Exportando',
+                imp: 'Imp',
+                exp: 'Exp',
+                diverter: 'Diverter',
+                diverterToday: 'Derivado Hoje'
+              }
+            };
+            const t = i18n[lang] || i18n.en;
+    
+            const gridArrow = gridW >= 0 ? '<< ' : '>> ';
+            const battDir = batteryW >= 0 ? t.charging : t.discharging;
+            const battArrow = batteryW >= 0 ? '>> ' : '<< ';
+            const gridDir = gridW >= 0 ? t.exporting : t.importing;
+    
+            const solarActive = solarW > 0;
+            const gridActive = Math.abs(gridW) > 0;
+            const homeActive = loadW > 0;
+            const batteryActive = Math.abs(batteryW) > 0;
+    
+            const pSolar = (solarActive ? 'active ' : 'idle ') + 'solar flow-down';
+            const pGrid = (gridActive ? 'active ' : 'idle ') + 'grid ' + (gridW >= 0 ? 'flow-left' : 'flow-right');
+            const pHome = (homeActive ? 'active ' : 'idle ') + 'home flow-right';
+            const pBattery = (batteryActive ? 'active ' : 'idle ') + 'battery ' + (batteryW >= 0 ? 'flow-down' : 'flow-up');
+            const hasFlow = solarActive || gridActive || homeActive || batteryActive;
+    
+            return [
+              '<div class=\"ibep-flow-wrap\">',
+              '<div class=\"ibep-flow-pipe pipe-top ', pSolar, '\"></div>',
+              '<div class=\"ibep-flow-pipe pipe-left ', pGrid, '\"></div>',
+              '<div class=\"ibep-flow-pipe pipe-right ', pHome, '\"></div>',
+              '<div class=\"ibep-flow-pipe pipe-bottom ', pBattery, '\"></div>',
+              '<div class=\"ibep-flow-node node-solar ', (solarActive ? 'node-active' : 'node-idle'), '\">',
+                '<div class=\"node-title\">', t.solar, '</div>',
+                '<div class=\"node-main\">', fmtW(solarW), '</div>',
+                '<div class=\"node-sub\">', fmtK(solarK), '</div>',
+              '</div>',
+              '<div class=\"ibep-flow-node node-grid ', (gridActive ? 'node-active' : 'node-idle'), '\">',
+                '<div class=\"node-title\">', t.grid, '</div>',
+                '<div class=\"node-main\">', gridArrow, fmtW(gridW), '</div>',
+                '<div class=\"node-sub\"><span class=\"node-sub-line node-sub-gap-after\">', gridDir, '</span><span class=\"node-sub-line\">', t.imp, '. ', fmtK(importK), '</span><span class=\"node-sub-line\">', t.exp, '. ', fmtK(exportK), '</span></div>',
+              '</div>',
+              '<div class=\"ibep-flow-node node-home ', (homeActive ? 'node-active' : 'node-idle'), '\">',
+                '<div class=\"node-title\">', t.home, '</div>',
+                '<div class=\"node-main\">', fmtW(loadW), '</div>',
+                '<div class=\"node-sub\"><span class=\"node-sub-line\">', t.diverter, '</span><span class=\"node-sub-line node-sub-gap-after\">', fmtW(diverterW), '</span><span class=\"node-sub-line\">', t.diverterToday, '</span><span class=\"node-sub-line\">', fmtK(diverterK), '</span></div>',
+              '</div>',
+              '<div class=\"ibep-flow-node node-battery ', (batteryActive ? 'node-active' : 'node-idle'), '\">',
+                '<div class=\"node-title\">', t.battery, '</div>',
+                '<div class=\"node-main\">', battArrow, fmtW(batteryW), '</div>',
+                '<div class=\"node-sub\"><span class=\"node-sub-line node-sub-gap-after\">', battDir, '</span><span class=\"node-sub-line\">SoC ', Math.round(batterySoc), '%</span></div>',
+              '</div>',
+              '<div class=\"ibep-flow-center ', (hasFlow ? 'live' : 'idle'), '\"></div>',
+              '</div>'
+            ].join('');
+          ]]]
+      styles:
+        card:
+          - border-radius: 24px
+          - padding: 16px 16px 12px
+          - border: 1px solid rgba(75, 204, 226, 0.40)
+          - background: radial-gradient(circle at 18% 14%, rgba(255, 205, 15, 0.18), transparent 40%), radial-gradient(circle at 84% 85%, rgba(75, 204, 226, 0.16), transparent 44%), radial-gradient(circle at 50% 88%, rgba(161, 210, 28, 0.10), transparent 48%), linear-gradient(145deg, rgba(64, 92, 68, 0.90), rgba(90, 124, 96, 0.88))
+          - box-shadow: 0 8px 28px rgba(0, 0, 0, 0.42)
+        name:
+          - justify-self: center
+          - color: '#ffffff'
+          - font-size: 1.35rem
+          - font-weight: 700
+          - letter-spacing: 0.04em
+          - text-transform: uppercase
+          - text-align: center
+          - text-shadow: 0 1px 4px rgba(0,0,0,0.55)
+          - width: 100%
+          - padding: 4px 6px 8px
+        grid:
+          - grid-template-areas: '"logo" "n" "flow"'
+          - grid-template-columns: 1fr
+          - row-gap: 4px
+        custom_fields:
+          logo:
+            - justify-self: center
+            - width: 100%
+            - padding-top: 2px
+          flow:
+            - justify-self: stretch
+      extra_styles: |
+        .ibep-brand-logo-wrap {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 5px 9px;
+          border-radius: 10px;
+          background: rgba(255, 255, 255, 0.10);
+          border: 1px solid rgba(126, 207, 226, 0.32);
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.30);
+        }
+        .ibep-brand-logo {
+          display: block;
+          width: min(46vw, 180px);
+          max-width: 100%;
+          height: auto;
+          object-fit: contain;
+        }
+        .ibep-flow-wrap {
+          position: relative;
+          height: 356px;
+          margin-top: 2px;
+          border-radius: 18px;
+          overflow: hidden;
+          background:
+            radial-gradient(circle at 18% 14%, rgba(255, 205, 15, 0.18), transparent 38%),
+            radial-gradient(circle at 82% 78%, rgba(75, 204, 226, 0.15), transparent 42%),
+            radial-gradient(circle at 54% 88%, rgba(161, 210, 28, 0.08), transparent 48%),
+            linear-gradient(155deg, rgba(56, 80, 60, 0.88), rgba(78, 108, 84, 0.86));
+          border: 1px solid rgba(124, 207, 226, 0.26);
+        }
+        .ibep-flow-wrap::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          pointer-events: none;
+          background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.028) 0px, rgba(255, 255, 255, 0.028) 1px, transparent 1px, transparent 24px);
+        }
+    
+        .ibep-flow-center {
+          position: absolute;
+          z-index: 4;
+          left: 50%;
+          top: 50%;
+          width: 14px;
+          height: 14px;
+          transform: translate(-50%, -50%);
+          border-radius: 50%;
+          background: #A1D21C;
+          box-shadow: 0 0 10px rgba(161, 210, 28, 0.62);
+        }
+        .ibep-flow-center.live {
+          animation: centerBeat 1.6s ease-in-out infinite;
+          box-shadow: 0 0 16px rgba(161, 210, 28, 0.88), 0 0 28px rgba(121, 188, 28, 0.42);
+        }
+        .ibep-flow-center.idle {
+          opacity: 0.65;
+        }
+    
+        .ibep-flow-pipe {
+          position: absolute;
+          z-index: 1;
+          border-radius: 999px;
+          opacity: 0.42;
+          background: rgba(210, 220, 230, 0.18);
+          box-shadow: inset 0 0 0 1px rgba(180, 200, 220, 0.22);
+        }
+        .ibep-flow-pipe.idle {
+          opacity: 0.24;
+        }
+        .ibep-flow-pipe.active {
+          opacity: 1;
+          box-shadow: 0 0 10px var(--flow-glow, rgba(121, 188, 28, 0.5));
+        }
+        .ibep-flow-pipe.solar { --flow-color: #FFCD0F; --flow-glow: rgba(255, 205, 15, 0.60); }
+        .ibep-flow-pipe.grid { --flow-color: #4BCCE2; --flow-glow: rgba(75, 204, 226, 0.58); }
+        .ibep-flow-pipe.home { --flow-color: #A1D21C; --flow-glow: rgba(161, 210, 28, 0.56); }
+        .ibep-flow-pipe.battery { --flow-color: #7ECFE2; --flow-glow: rgba(126, 207, 226, 0.58); }
+    
+        .pipe-top {
+          left: calc(50% - 1.5px);
+          top: 138px;
+          width: 3px;
+          height: 40px;
+        }
+        .pipe-left {
+          left: 140px;
+          top: calc(50% - 1.5px);
+          width: calc(50% - 140px);
+          height: 3px;
+        }
+        .pipe-right {
+          left: 50%;
+          top: calc(50% - 1.5px);
+          width: calc(50% - 140px);
+          height: 3px;
+        }
+        .pipe-bottom {
+          left: calc(50% - 1.5px);
+          top: 50%;
+          width: 3px;
+          height: 36px;
+        }
+    
+        .ibep-flow-pipe.active.flow-right {
+          background-image: repeating-linear-gradient(90deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 8px, var(--flow-color) 8px, var(--flow-color) 17px, rgba(255,255,255,0.9) 17px, rgba(255,255,255,0.9) 20px, rgba(255,255,255,0) 20px, rgba(255,255,255,0) 28px);
+          animation: flowRight 1s linear infinite, pipeGlow 2s ease-in-out infinite;
+        }
+        .ibep-flow-pipe.active.flow-left {
+          background-image: repeating-linear-gradient(90deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 8px, var(--flow-color) 8px, var(--flow-color) 17px, rgba(255,255,255,0.9) 17px, rgba(255,255,255,0.9) 20px, rgba(255,255,255,0) 20px, rgba(255,255,255,0) 28px);
+          animation: flowLeft 1s linear infinite, pipeGlow 2s ease-in-out infinite;
+        }
+        .ibep-flow-pipe.active.flow-down {
+          background-image: repeating-linear-gradient(180deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 8px, var(--flow-color) 8px, var(--flow-color) 17px, rgba(255,255,255,0.9) 17px, rgba(255,255,255,0.9) 20px, rgba(255,255,255,0) 20px, rgba(255,255,255,0) 28px);
+          animation: flowDown 1.1s linear infinite, pipeGlow 2s ease-in-out infinite;
+        }
+        .ibep-flow-pipe.active.flow-up {
+          background-image: repeating-linear-gradient(180deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 8px, var(--flow-color) 8px, var(--flow-color) 17px, rgba(255,255,255,0.9) 17px, rgba(255,255,255,0.9) 20px, rgba(255,255,255,0) 20px, rgba(255,255,255,0) 28px);
+          animation: flowUp 1.1s linear infinite, pipeGlow 2s ease-in-out infinite;
+        }
+    
+        .ibep-flow-node {
+          position: absolute;
+          z-index: 3;
+          width: 132px;
+          height: 132px;
+          border-radius: 999px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+          text-align: center;
+          padding: 8px 9px;
+          box-sizing: border-box;
+          border: 1.5px solid var(--node-accent, #A1D21C);
+          background: radial-gradient(circle at 34% 28%, rgba(52, 52, 52, 0.94), rgba(30, 30, 30, 0.97));
+          box-shadow: inset 0 0 18px rgba(255, 255, 255, 0.05), 0 4px 14px rgba(0,0,0,0.42);
+          transition: transform 0.25s ease, box-shadow 0.25s ease, opacity 0.25s ease;
+        }
+        .ibep-flow-node.node-active {
+          opacity: 1;
+          animation: nodeBreathe 2.6s ease-in-out infinite;
+          box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.06), 0 0 16px var(--node-glow, rgba(161, 210, 28, 0.46));
+        }
+        .ibep-flow-node.node-idle {
+          opacity: 0.88;
+        }
+        .node-solar {
+          top: 6px;
+          left: calc(50% - 66px);
+          --node-accent: #FFCD0F;
+          --node-glow: rgba(255, 205, 15, 0.52);
+        }
+        .node-grid {
+          top: 112px;
+          left: 8px;
+          --node-accent: #4BCCE2;
+          --node-glow: rgba(75, 204, 226, 0.52);
+        }
+        .node-home {
+          top: 112px;
+          right: 8px;
+          --node-accent: #79BC1C;
+          --node-glow: rgba(121, 188, 28, 0.48);
+        }
+        .node-battery {
+          bottom: 6px;
+          left: calc(50% - 66px);
+          --node-accent: #7ECFE2;
+          --node-glow: rgba(126, 207, 226, 0.52);
+        }
+    
+        .node-title {
+          color: #a8d8e8;
+          width: 100%;
+          max-width: 100%;
+          font-size: 0.80rem;
+          font-weight: 600;
+          line-height: 1.1;
+          letter-spacing: 0.03em;
+          text-transform: uppercase;
+          text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+          margin-bottom: 3px;
+        }
+        .node-main {
+          color: #ffffff;
+          width: 100%;
+          max-width: 100%;
+          font-size: 1.05rem;
+          font-weight: 700;
+          line-height: 1.1;
+          letter-spacing: 0.01em;
+          text-shadow: 0 1px 4px rgba(0,0,0,0.65);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .node-sub {
+          color: #7ECFE2;
+          width: 100%;
+          max-width: 100%;
+          font-size: 0.62rem;
+          font-weight: 500;
+          line-height: 1.18;
+          letter-spacing: 0.01em;
+          text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+          margin-top: 3px;
+          white-space: normal;
+          overflow-wrap: anywhere;
+          word-break: break-word;
+        }
+        .node-sub-line {
+          display: block;
+        }
+        .node-sub-gap-after {
+          margin-bottom: 4px;
+        }
+    
+        @keyframes flowRight {
+          0% { background-position: 0 0; }
+          100% { background-position: 28px 0; }
+        }
+        @keyframes flowLeft {
+          0% { background-position: 0 0; }
+          100% { background-position: -28px 0; }
+        }
+        @keyframes flowDown {
+          0% { background-position: 0 0; }
+          100% { background-position: 0 28px; }
+        }
+        @keyframes flowUp {
+          0% { background-position: 0 0; }
+          100% { background-position: 0 -28px; }
+        }
+        @keyframes pipeGlow {
+          0%, 100% { filter: brightness(1); }
+          50% { filter: brightness(1.22); }
+        }
+        @keyframes centerBeat {
+          0%, 100% { transform: translate(-50%, -50%) scale(1); }
+          50% { transform: translate(-50%, -50%) scale(1.16); }
+        }
+        @keyframes nodeBreathe {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-2px); }
+        }
+    
+        @media (max-width: 540px) {
+          .ibep-flow-wrap {
+            height: 330px;
+          }
+          .ibep-flow-node {
+            width: 116px;
+            height: 116px;
+            padding: 6px 8px;
+          }
+          .node-solar {
+            top: 8px;
+            left: calc(50% - 58px);
+          }
+          .node-grid {
+            top: 106px;
+            left: 2px;
+          }
+          .node-home {
+            top: 106px;
+            right: 2px;
+          }
+          .node-battery {
+            bottom: 8px;
+            left: calc(50% - 58px);
+          }
+          .pipe-top {
+            top: 124px;
+            height: 41px;
+          }
+          .pipe-left {
+            left: 118px;
+            width: calc(50% - 118px);
+          }
+          .pipe-right {
+            width: calc(50% - 118px);
+          }
+          .pipe-bottom {
+            height: 41px;
+          }
+          .node-title {
+            font-size: 0.8rem;
+          }
+          .node-main {
+            font-size: 0.9rem;
+          }
+          .node-sub {
+            font-size: 0.6rem;
+          }
+        }
+    - type: custom:button-card
+      entity: ${'sensor.' + vars[0] + '_ibepower_temperature'}
+      show_icon: false
+      show_name: false
+      show_state: false
+      variables:
+        base: ${vars[0]}
+      triggers_update:
+        - ${'sensor.' + vars[0] + '_inverter_temperature'}
+        - ${'sensor.inverter_temperature_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_chip_temperature'}
+        - ${'sensor.chip_temperature_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_thermo_temperature'}
+        - ${'sensor.thermo_temperature_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_ibepower_temperature'}
+        - ${'sensor.ibepower_temperature_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_custom_temperature'}
+        - ${'sensor.custom_temperature_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_thermo_sensor_name'}
+        - ${'sensor.thermo_sensor_name_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_custom_sensor_name'}
+        - ${'sensor.custom_sensor_name_' + vars[0]}
+      custom_fields:
+        temps: >
+          [[[ 
+            const base = variables.base;
+            const getObj = (field) => states['sensor.' + base + '_' + field] || states['sensor.' + field + '_' + base];
+            const toNum = (value) => {
+              const n = Number(String(value ?? '').replace(',', '.'));
+              return Number.isFinite(n) ? n : null;
+            };
+            const rawLang = String(
+              hass?.language ||
+              hass?.selectedLanguage ||
+              hass?.locale?.language ||
+              ((typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en') ||
+              'en'
+            ).toLowerCase();
+            const lang = rawLang.startsWith('es') ? 'es' : (rawLang.startsWith('pt') ? 'pt' : 'en');
+            const i18n = {
+              es: { none: 'No hay temperaturas activas', inverter: 'Inversor', chip: 'Chip', thermo: 'Termo', board: 'Ibepower', custom: 'Custom' },
+              en: { none: 'No active temperatures', inverter: 'Inverter', chip: 'Chip', thermo: 'Thermo', board: 'Ibepower', custom: 'Custom' },
+              pt: { none: 'Sem temperaturas ativas', inverter: 'Inversor', chip: 'Chip', thermo: 'Termo', board: 'Ibepower', custom: 'Custom' }
+            };
+            const t = i18n[lang] || i18n.en;
+            const cleanName = (v) => {
+              const s = String(v ?? '').trim();
+              if (!s || ['unknown','unavailable','none','null'].includes(s.toLowerCase())) return '';
+              return s;
+            };
+            const thermoName = cleanName(getObj('thermo_sensor_name')?.state);
+            const customName = cleanName(getObj('custom_sensor_name')?.state);
+            const defs = [
+              { field: 'inverter_temperature', label: t.inverter, color: '#FFCD0F' },
+              { field: 'chip_temperature', label: t.chip, color: '#A1D21C' },
+              { field: 'thermo_temperature', label: thermoName || t.thermo, color: '#A1D21C' },
+              { field: 'ibepower_temperature', label: t.board, color: '#79BC1C' },
+              { field: 'custom_temperature', label: customName || t.custom, color: '#A1D21C' }
+            ];
+            const items = defs.map((def) => {
+              const obj = getObj(def.field);
+              if (!obj) return null;
+              const value = toNum(obj.state);
+              if (value === null) return null;
+              return '<div class="ibep-temp-pill"><span class="ibep-temp-label">' + def.label + '</span><span class="ibep-temp-value">' + value.toFixed(1) + '°C</span></div>';
+            }).filter(Boolean);
+            if (!items.length) {
+              return '<div class="ibep-temp-empty">' + t.none + '</div>';
+            }
+            return '<div class="ibep-temps-wrap">' + items.join('') + '</div>';
+          ]]]
+      styles:
+        card:
+          - border-radius: 14px
+          - margin-top: 2px
+          - padding: 10px 12px 8px
+          - background: linear-gradient(145deg, rgba(8, 52, 66, 0.52), rgba(24, 86, 54, 0.46))
+          - border: 1px solid rgba(126, 207, 226, 0.42)
+        grid:
+          - grid-template-areas: '"temps"'
+          - grid-template-columns: 1fr
+          - grid-template-rows: auto
+        custom_fields:
+          temps:
+            - justify-self: stretch
+            - width: 100%
+      extra_styles: |
+        .ibep-temps-wrap {
+          display: flex;
+          flex-wrap: nowrap;
+          align-items: stretch;
+          justify-content: stretch;
+          gap: 8px;
+          width: 100%;
+        }
+        .ibep-temp-pill {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 2px;
+          flex: 1 1 0;
+          min-width: 0;
+          padding: 6px 8px;
+          border-radius: 10px;
+          background: linear-gradient(145deg, rgba(6, 34, 48, 0.72), rgba(18, 62, 44, 0.68));
+          border: 1px solid rgba(126, 207, 226, 0.40);
+        }
+        .ibep-temp-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 999px;
+          flex: 0 0 auto;
+          box-shadow: 0 0 6px rgba(255,255,255,0.35);
+        }
+        .ibep-temp-label {
+          color: #7ECFE2;
+          font-size: 0.68rem;
+          font-weight: 500;
+          letter-spacing: 0.02em;
+          text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          width: 100%;
+          text-align: center;
+        }
+        .ibep-temp-value {
+          color: #ffffff;
+          font-size: 0.78rem;
+          font-weight: 700;
+          text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+          width: 100%;
+          text-align: center;
+        }
+        .ibep-temp-empty {
+          color: #d8f8e7;
+          font-size: 0.72rem;
+          padding: 4px 2px;
+          text-align: center;
+        }
+    - type: vertical-stack
+      cards:
+        - type: grid
+          columns: 2
+          square: false
+          cards:
+            - type: custom:button-card
+              entity: ${((states['switch.' + vars[0] + '_ibediv']) && ('switch.' + vars[0] + '_ibediv')) || ((states['switch.ibediv_' + vars[0]]) && ('switch.ibediv_' + vars[0])) || ((states['switch.' + vars[0] + '_switch_on_off']) && ('switch.' + vars[0] + '_switch_on_off')) || ('switch.switch_on_off_' + vars[0])}
+              show_icon: false
+              show_name: true
+              show_state: true
+              show_label: false
+              variables:
+                base: ${vars[0]}
+              triggers_update:
+                - ${'switch.' + vars[0] + '_ibediv'}
+                - ${'switch.ibediv_' + vars[0]}
+                - ${'switch.' + vars[0] + '_switch_on_off'}
+                - ${'switch.switch_on_off_' + vars[0]}
+                - ${'select.' + vars[0] + '_modo_de_trabajo'}
+                - ${'select.modo_de_trabajo_' + vars[0]}
+                - ${'select.' + vars[0] + '_work_mode_select'}
+                - ${'select.work_mode_select_' + vars[0]}
+              name: >
+                [[[
+                  const rawLang = String(
+                    hass?.language ||
+                    hass?.selectedLanguage ||
+                    hass?.locale?.language ||
+                    ((typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en') ||
+                    'en'
+                  ).toLowerCase();
+                  const lang = rawLang.startsWith('es') ? 'es' : (rawLang.startsWith('pt') ? 'pt' : 'en');
+                  if (lang === 'es') return 'Gestor';
+                  if (lang === 'pt') return 'Gestor';
+                  return 'Manager';
+                ]]]
+              state_display: >
+                [[[
+                  const rawLang = String(
+                    hass?.language ||
+                    hass?.selectedLanguage ||
+                    hass?.locale?.language ||
+                    ((typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en') ||
+                    'en'
+                  ).toLowerCase();
+                  const lang = rawLang.startsWith('es') ? 'es' : (rawLang.startsWith('pt') ? 'pt' : 'en');
+                  const isOn = entity?.state === 'on';
+                  if (lang === 'es') return isOn ? 'Encendido' : 'Apagado';
+                  if (lang === 'pt') return isOn ? 'Ligado' : 'Desligado';
+                  return isOn ? 'On' : 'Off';
+                ]]]
+              tap_action:
+                action: toggle
+              styles:
+                card:
+                  - border-radius: 10px
+                  - padding: 8px 6px
+                  - min-height: 58px
+                  - background: >
+                      [[[
+                        return entity?.state === 'on'
+                          ? 'linear-gradient(145deg, rgba(78, 118, 20, 0.78), rgba(56, 86, 16, 0.76))'
+                          : 'linear-gradient(145deg, rgba(18, 60, 74, 0.76), rgba(14, 44, 58, 0.74))';
+                      ]]]
+                  - border: >
+                      [[[
+                        return entity?.state === 'on'
+                          ? '1px solid rgba(161, 210, 28, 0.78)'
+                          : '1px solid rgba(126, 207, 226, 0.52)';
+                      ]]]
+                  - box-shadow: >
+                      [[[
+                        return entity?.state === 'on'
+                          ? '0 0 12px rgba(161, 210, 28, 0.26), inset 0 0 18px rgba(161,210,28,0.14)'
+                          : 'none';
+                      ]]]
+                name:
+                  - color: '#7ECFE2'
+                  - font-size: 0.80rem
+                  - font-weight: 600
+                  - letter-spacing: 0.02em
+                  - text-shadow: '0 1px 3px rgba(0,0,0,0.8)'
+                state:
+                  - color: '#ffffff'
+                  - font-size: 0.96rem
+                  - font-weight: 700
+                  - text-shadow: '0 1px 4px rgba(0,0,0,0.7)'
+            - type: custom:button-card
+              entity: ${((states['select.' + vars[0] + '_modo_de_trabajo']) && ('select.' + vars[0] + '_modo_de_trabajo')) || ((states['select.modo_de_trabajo_' + vars[0]]) && ('select.modo_de_trabajo_' + vars[0])) || ((states['select.' + vars[0] + '_work_mode_select']) && ('select.' + vars[0] + '_work_mode_select')) || ('select.work_mode_select_' + vars[0])}
+              show_icon: false
+              show_name: true
+              show_state: true
+              show_label: false
+              variables:
+                base: ${vars[0]}
+              triggers_update:
+                - ${'switch.' + vars[0] + '_ibediv'}
+                - ${'switch.ibediv_' + vars[0]}
+                - ${'switch.' + vars[0] + '_switch_on_off'}
+                - ${'switch.switch_on_off_' + vars[0]}
+                - ${'select.' + vars[0] + '_modo_de_trabajo'}
+                - ${'select.modo_de_trabajo_' + vars[0]}
+                - ${'select.' + vars[0] + '_work_mode_select'}
+                - ${'select.work_mode_select_' + vars[0]}
+              name: >
+                [[[
+                  const rawLang = String(
+                    hass?.language ||
+                    hass?.selectedLanguage ||
+                    hass?.locale?.language ||
+                    ((typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en') ||
+                    'en'
+                  ).toLowerCase();
+                  const lang = rawLang.startsWith('es') ? 'es' : (rawLang.startsWith('pt') ? 'pt' : 'en');
+                  if (lang === 'es') return 'Modo';
+                  if (lang === 'pt') return 'Modo';
+                  return 'Mode';
+                ]]]
+              state_display: >
+                [[[
+                  const base = variables.base;
+                  const managerObj =
+                    states['switch.' + base + '_ibediv'] ||
+                    states['switch.ibediv_' + base] ||
+                    states['switch.' + base + '_switch_on_off'] ||
+                    states['switch.switch_on_off_' + base];
+                  const managerOn = managerObj?.state === 'on';
+                  const rawMode = String(entity?.state ?? '').toUpperCase();
+                  const modeFromEntity = rawMode.startsWith('MAN') ? 'MANUAL' : 'AUTO';
+                  const modeKey = 'ibepower_ui_mode_' + base;
+                  let uiMode = modeFromEntity;
+                  try {
+                    if (managerOn) {
+                      localStorage.setItem(modeKey, modeFromEntity);
+                    } else {
+                      const saved = localStorage.getItem(modeKey);
+                      if (saved === 'MANUAL' || saved === 'AUTO') uiMode = saved;
+                    }
+                  } catch (e) {}
+                  const rawLang = String(
+                    hass?.language ||
+                    hass?.selectedLanguage ||
+                    hass?.locale?.language ||
+                    ((typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en') ||
+                    'en'
+                  ).toLowerCase();
+                  const lang = rawLang.startsWith('es') ? 'es' : (rawLang.startsWith('pt') ? 'pt' : 'en');
+                  const manual = uiMode === 'MANUAL';
+                  if (lang === 'es') return manual ? 'Manual' : 'Auto';
+                  if (lang === 'pt') return manual ? 'Manual' : 'Auto';
+                  return manual ? 'Manual' : 'Auto';
+                ]]]
+              tap_action:
+                action: >
+                  [[[
+                    const base = variables.base;
+                    const managerObj =
+                      states['switch.' + base + '_ibediv'] ||
+                      states['switch.ibediv_' + base] ||
+                      states['switch.' + base + '_switch_on_off'] ||
+                      states['switch.switch_on_off_' + base];
+                    return managerObj?.state === 'on' ? 'call-service' : 'none';
+                  ]]]
+                service: select.select_option
+                service_data:
+                  entity_id: >
+                    [[[
+                      return entity?.entity_id || ('select.' + variables.base + '_modo_de_trabajo');
+                    ]]]
+                  option: >
+                    [[[
+                      const raw = String(entity?.state ?? '').toUpperCase();
+                      return raw.startsWith('MAN') ? 'AUTO' : 'MANUAL';
+                    ]]]
+              styles:
+                card:
+                  - border-radius: 10px
+                  - padding: 8px 6px
+                  - min-height: 58px
+                  - background: >
+                      [[[
+                        const base = variables.base;
+                        const managerObj =
+                          states['switch.' + base + '_ibediv'] ||
+                          states['switch.ibediv_' + base] ||
+                          states['switch.' + base + '_switch_on_off'] ||
+                          states['switch.switch_on_off_' + base];
+                        const managerOn = managerObj?.state === 'on';
+                        const manual = String(entity?.state ?? '').toUpperCase().startsWith('MAN');
+                        if (!managerOn) {
+                          return 'linear-gradient(145deg, rgba(76, 62, 24, 0.66), rgba(58, 48, 18, 0.64))';
+                        }
+                        return manual
+                          ? 'linear-gradient(145deg, rgba(164, 126, 20, 0.84), rgba(122, 88, 10, 0.82))'
+                          : 'linear-gradient(145deg, rgba(128, 98, 20, 0.74), rgba(94, 72, 14, 0.72))';
+                      ]]]
+                  - border: >
+                      [[[
+                        const base = variables.base;
+                        const managerObj =
+                          states['switch.' + base + '_ibediv'] ||
+                          states['switch.ibediv_' + base] ||
+                          states['switch.' + base + '_switch_on_off'] ||
+                          states['switch.switch_on_off_' + base];
+                        const managerOn = managerObj?.state === 'on';
+                        if (!managerOn) {
+                          return '1px solid rgba(186, 164, 94, 0.44)';
+                        }
+                        const manual = String(entity?.state ?? '').toUpperCase().startsWith('MAN');
+                        return manual
+                          ? '1px solid rgba(255, 220, 88, 0.86)'
+                          : '1px solid rgba(232, 196, 84, 0.74)';
+                      ]]]
+                  - box-shadow: >
+                      [[[
+                        const base = variables.base;
+                        const managerObj =
+                          states['switch.' + base + '_ibediv'] ||
+                          states['switch.ibediv_' + base] ||
+                          states['switch.' + base + '_switch_on_off'] ||
+                          states['switch.switch_on_off_' + base];
+                        const managerOn = managerObj?.state === 'on';
+                        if (!managerOn) return 'none';
+                        const manual = String(entity?.state ?? '').toUpperCase().startsWith('MAN');
+                        return manual
+                          ? '0 0 14px rgba(255, 210, 40, 0.34), inset 0 0 16px rgba(255,205,15,0.16)'
+                          : '0 0 8px rgba(220, 180, 52, 0.20), inset 0 0 12px rgba(220,180,52,0.08)';
+                      ]]]
+                  - opacity: >
+                      [[[
+                        const base = variables.base;
+                        const managerObj =
+                          states['switch.' + base + '_ibediv'] ||
+                          states['switch.ibediv_' + base] ||
+                          states['switch.' + base + '_switch_on_off'] ||
+                          states['switch.switch_on_off_' + base];
+                        return managerObj?.state === 'on' ? '1' : '0.58';
+                      ]]]
+                  - pointer-events: >
+                      [[[
+                        const base = variables.base;
+                        const managerObj =
+                          states['switch.' + base + '_ibediv'] ||
+                          states['switch.ibediv_' + base] ||
+                          states['switch.' + base + '_switch_on_off'] ||
+                          states['switch.switch_on_off_' + base];
+                        return managerObj?.state === 'on' ? 'auto' : 'none';
+                      ]]]
+                name:
+                  - color: '#7ECFE2'
+                  - font-size: 0.80rem
+                  - font-weight: 600
+                  - letter-spacing: 0.02em
+                  - text-shadow: '0 1px 3px rgba(0,0,0,0.8)'
+                state:
+                  - color: '#ffffff'
+                  - font-size: 0.96rem
+                  - font-weight: 700
+                  - text-shadow: '0 1px 4px rgba(0,0,0,0.7)'
+        - type: custom:button-card
+          entity: "${((states['number.' + vars[0] + '_manual']) && ('number.' + vars[0] + '_manual')) || ((states['number.manual_' + vars[0]]) && ('number.manual_' + vars[0])) || ((states['number.' + vars[0] + '_pwm_value_setter']) && ('number.' + vars[0] + '_pwm_value_setter')) || ('number.pwm_value_setter_' + vars[0])}"
+          show_icon: false
+          show_name: false
+          show_state: false
+          tap_action:
+            action: none
+          hold_action:
+            action: none
+          variables:
+            base: ${vars[0]}
+          triggers_update:
+            - ${'switch.' + vars[0] + '_ibediv'}
+            - ${'switch.ibediv_' + vars[0]}
+            - ${'switch.' + vars[0] + '_switch_on_off'}
+            - ${'switch.switch_on_off_' + vars[0]}
+            - ${'select.' + vars[0] + '_modo_de_trabajo'}
+            - ${'select.modo_de_trabajo_' + vars[0]}
+            - ${'select.' + vars[0] + '_work_mode_select'}
+            - ${'select.work_mode_select_' + vars[0]}
+            - ${'number.' + vars[0] + '_manual'}
+            - ${'number.manual_' + vars[0]}
+            - ${'number.' + vars[0] + '_pwm_value_setter'}
+            - ${'number.pwm_value_setter_' + vars[0]}
+          custom_fields:
+            slider: >
+              [[[
+                try {
+                  const base = variables.base;
+                  const managerObj =
+                    states['switch.' + base + '_ibediv'] ||
+                    states['switch.ibediv_' + base] ||
+                    states['switch.' + base + '_switch_on_off'] ||
+                    states['switch.switch_on_off_' + base];
+                  const managerOn = managerObj?.state === 'on';
+                  const modeObj =
+                    states['select.' + base + '_modo_de_trabajo'] ||
+                    states['select.modo_de_trabajo_' + base] ||
+                    states['select.' + base + '_work_mode_select'] ||
+                    states['select.work_mode_select_' + base];
+                  const rawMode = String(modeObj?.state ?? '').toUpperCase();
+                  const modeFromEntity = rawMode.startsWith('MAN') ? 'MANUAL' : 'AUTO';
+                  const modeKey = 'ibepower_ui_mode_' + base;
+                  let uiMode = modeFromEntity;
+                  try {
+                    if (managerOn) {
+                      localStorage.setItem(modeKey, modeFromEntity);
+                    } else {
+                      const saved = localStorage.getItem(modeKey);
+                      if (saved === 'MANUAL' || saved === 'AUTO') uiMode = saved;
+                    }
+                  } catch (e) {}
+                  if (uiMode !== 'MANUAL') return '';
+                  const entityId = entity?.entity_id || ('number.' + variables.base + '_manual');
+                  const rawValue = Number(entity?.state ?? 0);
+                  const value = Number.isFinite(rawValue) ? Math.max(0, Math.min(100, Math.round(rawValue))) : 0;
+                  const disabledAttr = managerOn ? '' : ' disabled';
+                  const disabledClass = managerOn ? '' : ' is-disabled';
+                  return [
+                    '<div class="ibep-slider-wrap', disabledClass, '" style="--ibep-pct:', value, '%;">',
+                      '<input class="ibep-slider-input" type="range" min="0" max="100" step="1" value="', value, '" data-entity="', entityId, '"', disabledAttr, ' oninput="(function(el,val){if(el.disabled){return;}const p=Math.max(0,Math.min(100,Number(val)||0));el.parentElement.style.setProperty(\'--ibep-pct\', p + \'%\');const t=el.parentElement.querySelector(\'.ibep-slider-value\');if(t){t.textContent=Math.round(p)+\'%\';}})(this,this.value)" onchange="(function(el,val){if(el.disabled){return;}const p=Math.max(0,Math.min(100,Number(val)||0));const id=el.dataset.entity;const root=document.querySelector(\'home-assistant\');let hass=root&&root.hass;if(!hass&&root&&root.shadowRoot){const main=root.shadowRoot.querySelector(\'home-assistant-main\');hass=main&&main.hass;}if(hass&&id){hass.callService(\'number\',\'set_value\',{entity_id:id,value:p});}})(this,this.value)" />',
+                      '<div class="ibep-slider-overlay">',
+                        '<span class="ibep-slider-value">', value, '%</span>',
+                      '</div>',
+                    '</div>'
+                  ].join('');
+                } catch (e) {
+                  return '<div class="ibep-slider-fallback">Slider error</div>';
+                }
+              ]]]
+          styles:
+            card:
+              - margin-top: >
+                  [[[
+                    const base = variables.base;
+                    const managerObj =
+                      states['switch.' + base + '_ibediv'] ||
+                      states['switch.ibediv_' + base] ||
+                      states['switch.' + base + '_switch_on_off'] ||
+                      states['switch.switch_on_off_' + base];
+                    const managerOn = managerObj?.state === 'on';
+                    const modeObj =
+                      states['select.' + base + '_modo_de_trabajo'] ||
+                      states['select.modo_de_trabajo_' + base] ||
+                      states['select.' + base + '_work_mode_select'] ||
+                      states['select.work_mode_select_' + base];
+                    const rawMode = String(modeObj?.state ?? '').toUpperCase();
+                    const modeFromEntity = rawMode.startsWith('MAN') ? 'MANUAL' : 'AUTO';
+                    const modeKey = 'ibepower_ui_mode_' + base;
+                    let uiMode = modeFromEntity;
+                    try {
+                      if (managerOn) {
+                        localStorage.setItem(modeKey, modeFromEntity);
+                      } else {
+                        const saved = localStorage.getItem(modeKey);
+                        if (saved === 'MANUAL' || saved === 'AUTO') uiMode = saved;
+                      }
+                    } catch (e) {}
+                    return uiMode === 'MANUAL' ? '6px' : '0';
+                  ]]]
+              - display: >
+                  [[[
+                    const base = variables.base;
+                    const managerObj =
+                      states['switch.' + base + '_ibediv'] ||
+                      states['switch.ibediv_' + base] ||
+                      states['switch.' + base + '_switch_on_off'] ||
+                      states['switch.switch_on_off_' + base];
+                    const managerOn = managerObj?.state === 'on';
+                    const modeObj =
+                      states['select.' + base + '_modo_de_trabajo'] ||
+                      states['select.modo_de_trabajo_' + base] ||
+                      states['select.' + base + '_work_mode_select'] ||
+                      states['select.work_mode_select_' + base];
+                    const rawMode = String(modeObj?.state ?? '').toUpperCase();
+                    const modeFromEntity = rawMode.startsWith('MAN') ? 'MANUAL' : 'AUTO';
+                    const modeKey = 'ibepower_ui_mode_' + base;
+                    let uiMode = modeFromEntity;
+                    try {
+                      if (managerOn) {
+                        localStorage.setItem(modeKey, modeFromEntity);
+                      } else {
+                        const saved = localStorage.getItem(modeKey);
+                        if (saved === 'MANUAL' || saved === 'AUTO') uiMode = saved;
+                      }
+                    } catch (e) {}
+                    return uiMode === 'MANUAL' ? 'block' : 'none';
+                  ]]]
+              - opacity: >
+                  [[[
+                    const base = variables.base;
+                    const managerObj =
+                      states['switch.' + base + '_ibediv'] ||
+                      states['switch.ibediv_' + base] ||
+                      states['switch.' + base + '_switch_on_off'] ||
+                      states['switch.switch_on_off_' + base];
+                    return managerObj?.state === 'on' ? '1' : '0.56';
+                  ]]]
+              - pointer-events: >
+                  [[[
+                    const base = variables.base;
+                    const managerObj =
+                      states['switch.' + base + '_ibediv'] ||
+                      states['switch.ibediv_' + base] ||
+                      states['switch.' + base + '_switch_on_off'] ||
+                      states['switch.switch_on_off_' + base];
+                    return managerObj?.state === 'on' ? 'auto' : 'none';
+                  ]]]
+              - border-radius: 0
+              - padding: 0
+              - background: transparent
+              - border: none
+              - box-shadow: none
+            grid:
+              - grid-template-areas: '"slider"'
+              - grid-template-columns: 1fr
+              - grid-template-rows: auto
+            custom_fields:
+              slider:
+                - justify-self: stretch
+                - width: 100%
+                - height: 35px
+                - pointer-events: auto
+          extra_styles: |
+            .ibep-slider-wrap {
+              --ibep-fill: #79BC1C;
+              --ibep-track: rgba(121, 188, 28, 0.30);
+              position: relative;
+              width: 100%;
+              height: 30px;
+              border-radius: 12px;
+              overflow: hidden;
+              background: linear-gradient(90deg, var(--ibep-fill) 0%, var(--ibep-fill) var(--ibep-pct), var(--ibep-track) var(--ibep-pct), var(--ibep-track) 100%);
+              pointer-events: auto;
+            }
+            .ibep-slider-wrap.is-disabled {
+              --ibep-fill: rgba(121, 188, 28, 0.62);
+              --ibep-track: rgba(121, 188, 28, 0.18);
+            }
+            .ibep-slider-input {
+              -webkit-appearance: none;
+              appearance: none;
+              width: 100%;
+              height: 100%;
+              margin: 0;
+              border: none;
+              outline: none;
+              background: transparent;
+              cursor: pointer;
+              accent-color: #79BC1C;
+              pointer-events: auto;
+              touch-action: pan-y;
+            }
+            .ibep-slider-wrap.is-disabled .ibep-slider-input {
+              cursor: not-allowed;
+            }
+            .ibep-slider-input::-webkit-slider-runnable-track {
+              height: 30px;
+              background: transparent;
+              border: none;
+            }
+            .ibep-slider-input::-webkit-slider-thumb {
+              -webkit-appearance: none;
+              appearance: none;
+              width: 6px;
+              height: 18px;
+              border: none;
+              border-radius: 999px;
+              background: #ffffff;
+              box-shadow: 0 2px 6px rgba(0, 0, 0, 0.32);
+              margin-top: 6px;
+            }
+            .ibep-slider-input::-moz-range-track {
+              height: 30px;
+              background: transparent;
+              border: none;
+            }
+            .ibep-slider-input::-moz-range-progress {
+              height: 30px;
+              background: transparent;
+              border: none;
+            }
+            .ibep-slider-input::-moz-range-thumb {
+              width: 6px;
+              height: 18px;
+              border: none;
+              border-radius: 999px;
+              background: #ffffff;
+              box-shadow: 0 2px 6px rgba(0, 0, 0, 0.32);
+            }
+            .ibep-slider-overlay {
+              position: absolute;
+              inset: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              pointer-events: none;
+              z-index: 2;
+            }
+            .ibep-slider-value {
+              color: #ffffff;
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              width: auto !important;
+              min-width: 2.8ch;
+              max-width: max-content;
+              height: 20px;
+              font-size: 0.86rem;
+              font-weight: 700;
+              text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+              line-height: 20px;
+              white-space: nowrap;
+              opacity: 1;
+              padding: 0 6px;
+              border: 1px solid rgba(255, 255, 255, 0.40);
+              border-radius: 999px;
+              background: rgba(0, 0, 0, 0.16);
+              box-sizing: border-box;
+              margin: 0 !important;
+              flex: 0 0 auto;
+            }
+            .ibep-slider-fallback {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              width: 100%;
+              height: 30px;
+              border-radius: 12px;
+              background: rgba(121, 188, 28, 0.16);
+              color: #ffffff;
+              font-size: 0.72rem;
+            }
