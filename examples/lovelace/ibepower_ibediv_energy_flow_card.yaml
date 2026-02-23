@@ -1,18 +1,4 @@
-﻿# Ibepower Ibediv energy-flow card (base-name mode)
-#
-# Requirements (HACS):
-# - config-template-card
-# - button-card
-#
-# Use:
-# 1) Change only BASE below (slug):
-#    variables:
-#      - "'test_no_usar'"
-# 2) Optional: adjust logo path (default bundled by integration):
-#      - "'/ibepower_static/ibepower_logo.png'"
-# 3) Done. The card will resolve entities as: sensor.<BASE>_<field>
-
-type: custom:config-template-card
+﻿type: custom:config-template-card
 variables:
   - "'test_no_usar'"
   - "'/ibepower_static/ibepower_logo.png'"
@@ -29,6 +15,8 @@ entities:
   - ${'sensor.battery_soc_' + vars[0]}
   - ${'sensor.' + vars[0] + '_calculated_watts'}
   - ${'sensor.calculated_watts_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_pwm_value'}
+  - ${'sensor.pwm_value_' + vars[0]}
   - ${'sensor.' + vars[0] + '_kw_solar_today'}
   - ${'sensor.kw_solar_today_' + vars[0]}
   - ${'sensor.' + vars[0] + '_kw_import_today'}
@@ -53,8 +41,11 @@ card:
   type: vertical-stack
   cards:
     - type: custom:button-card
-      entity: "${((states['sensor.' + vars[0] + '_calculated_watts']) && ('sensor.' + vars[0] + '_calculated_watts')) || ('sensor.calculated_watts_' + vars[0])}"
-      name: "${('' + vars[0]).toUpperCase()}"
+      entity: >-
+        ${((states['sensor.' + vars[0] + '_calculated_watts']) && ('sensor.' +
+        vars[0] + '_calculated_watts')) || ('sensor.calculated_watts_' +
+        vars[0])}
+      name: ${('' + vars[0]).toUpperCase()}
       show_icon: false
       show_state: false
       show_label: false
@@ -63,7 +54,7 @@ card:
         logo_src: ${vars[1]}
       triggers_update: all
       custom_fields:
-        logo: >
+        logo: |
           [[[
             const toUrl = (p) => {
               if (hass && typeof hass.hassUrl === 'function') return hass.hassUrl(p);
@@ -75,11 +66,20 @@ card:
             const fallbackSrc = toUrl(fallback);
             return '<div class="ibep-brand-logo-wrap"><img class="ibep-brand-logo" src="' + src + '" data-fallback="' + fallbackSrc + '" onerror="if(!this.dataset.err){this.dataset.err=\'1\';this.src=this.dataset.fallback;}" alt="Ibepower"></div>';
           ]]]
-        flow: >
+        flow: |
           [[[
             const base = variables.base;
-            const getObj = (field) => states['sensor.' + base + '_' + field] || states['sensor.' + field + '_' + base];
+            const safeStates = (states && typeof states === 'object') ? states : {};
+            const invalidState = (state) => {
+              const s = String(state ?? '').trim().toLowerCase();
+              return !s || s === 'unknown' || s === 'unavailable' || s === 'none' || s === 'null';
+            };
+            const getObj = (field) => safeStates['sensor.' + base + '_' + field] || safeStates['sensor.' + field + '_' + base];
             const getRaw = (field) => getObj(field)?.state;
+            const hasEntity = (field) => {
+              const obj = getObj(field);
+              return !!obj && !invalidState(obj.state);
+            };
             const num = (field) => {
               const raw = String(getRaw(field) ?? '').replace(',', '.');
               const v = Number(raw);
@@ -87,19 +87,23 @@ card:
             };
             const fmtW = (v) => Math.round(Math.abs(v)) + ' W';
             const fmtK = (v) => Number(v).toFixed(2) + ' kWh';
-    
+
             const solarW = num('solar_watts');
             const gridW = num('grid_watts');
             const loadW = num('load_watts');
             const batteryW = num('battery_power');
             const batterySoc = num('battery_soc');
             const diverterW = num('calculated_watts');
-    
+            const pwmRaw = String(getRaw('pwm_value') ?? '').replace(',', '.');
+            const pwmNum = Number(pwmRaw);
+            const pwmPct = Number.isFinite(pwmNum) ? Math.round(Math.max(0, Math.min(100, pwmNum))) : null;
+            const pwmText = pwmPct === null ? '-- %' : (pwmPct + ' %');
+
             const solarK = num('kw_solar_today');
             const importK = num('kw_import_today');
             const exportK = num('kw_export_today');
             const diverterK = num('kw_diverter_today');
-    
+
             const browserLang = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : '';
             const rawLang = String(
               hass?.language ||
@@ -160,29 +164,29 @@ card:
               }
             };
             const t = i18n[lang] || i18n.en;
-    
-            const gridArrow = gridW >= 0 ? '<< ' : '>> ';
+
             const battDir = batteryW >= 0 ? t.charging : t.discharging;
-            const battArrow = batteryW >= 0 ? '>> ' : '<< ';
             const gridDir = gridW >= 0 ? t.exporting : t.importing;
-    
+            const showBatteryNode = hasEntity('battery_power') || hasEntity('battery_soc');
+
             const solarActive = solarW > 0;
             const gridActive = Math.abs(gridW) > 0;
             const homeActive = loadW > 0;
-            const batteryActive = Math.abs(batteryW) > 0;
-    
+            const batteryActive = showBatteryNode && Math.abs(batteryW) > 0;
+
             const pSolar = (solarActive ? 'active ' : 'idle ') + 'solar flow-down';
             const pGrid = (gridActive ? 'active ' : 'idle ') + 'grid ' + (gridW >= 0 ? 'flow-left' : 'flow-right');
             const pHome = (homeActive ? 'active ' : 'idle ') + 'home flow-right';
             const pBattery = (batteryActive ? 'active ' : 'idle ') + 'battery ' + (batteryW >= 0 ? 'flow-down' : 'flow-up');
-            const hasFlow = solarActive || gridActive || homeActive || batteryActive;
-    
+            const hasFlow = solarActive || gridActive || homeActive || (showBatteryNode && batteryActive);
+            const wrapClass = showBatteryNode ? 'ibep-flow-wrap has-battery' : 'ibep-flow-wrap no-battery';
+
             return [
-              '<div class=\"ibep-flow-wrap\">',
+              '<div class=\"', wrapClass, '\">',
               '<div class=\"ibep-flow-pipe pipe-top ', pSolar, '\"></div>',
               '<div class=\"ibep-flow-pipe pipe-left ', pGrid, '\"></div>',
               '<div class=\"ibep-flow-pipe pipe-right ', pHome, '\"></div>',
-              '<div class=\"ibep-flow-pipe pipe-bottom ', pBattery, '\"></div>',
+              (showBatteryNode ? ('<div class=\"ibep-flow-pipe pipe-bottom ' + pBattery + '\"></div>') : ''),
               '<div class=\"ibep-flow-node node-solar ', (solarActive ? 'node-active' : 'node-idle'), '\">',
                 '<div class=\"node-title\">', t.solar, '</div>',
                 '<div class=\"node-main\">', fmtW(solarW), '</div>',
@@ -190,19 +194,23 @@ card:
               '</div>',
               '<div class=\"ibep-flow-node node-grid ', (gridActive ? 'node-active' : 'node-idle'), '\">',
                 '<div class=\"node-title\">', t.grid, '</div>',
-                '<div class=\"node-main\">', gridArrow, fmtW(gridW), '</div>',
+                '<div class=\"node-main\">', fmtW(gridW), '</div>',
                 '<div class=\"node-sub\"><span class=\"node-sub-line node-sub-gap-after\">', gridDir, '</span><span class=\"node-sub-line\">', t.imp, '. ', fmtK(importK), '</span><span class=\"node-sub-line\">', t.exp, '. ', fmtK(exportK), '</span></div>',
               '</div>',
               '<div class=\"ibep-flow-node node-home ', (homeActive ? 'node-active' : 'node-idle'), '\">',
                 '<div class=\"node-title\">', t.home, '</div>',
                 '<div class=\"node-main\">', fmtW(loadW), '</div>',
-                '<div class=\"node-sub\"><span class=\"node-sub-line\">', t.diverter, '</span><span class=\"node-sub-line node-sub-gap-after\">', fmtW(diverterW), '</span><span class=\"node-sub-line\">', t.diverterToday, '</span><span class=\"node-sub-line\">', fmtK(diverterK), '</span></div>',
+                '<div class=\"node-sub\"><span class=\"node-sub-line\">', t.diverter, '</span><span class=\"node-sub-line node-sub-gap-after\">', pwmText, ' - ', fmtW(diverterW), '</span><span class=\"node-sub-line\">', t.diverterToday, '</span><span class=\"node-sub-line\">', fmtK(diverterK), '</span></div>',
               '</div>',
-              '<div class=\"ibep-flow-node node-battery ', (batteryActive ? 'node-active' : 'node-idle'), '\">',
-                '<div class=\"node-title\">', t.battery, '</div>',
-                '<div class=\"node-main\">', battArrow, fmtW(batteryW), '</div>',
-                '<div class=\"node-sub\"><span class=\"node-sub-line node-sub-gap-after\">', battDir, '</span><span class=\"node-sub-line\">SoC ', Math.round(batterySoc), '%</span></div>',
-              '</div>',
+              (showBatteryNode
+                ? [
+                    '<div class=\"ibep-flow-node node-battery ', (batteryActive ? 'node-active' : 'node-idle'), '\">',
+                      '<div class=\"node-title\">', t.battery, '</div>',
+                      '<div class=\"node-main\">', fmtW(batteryW), '</div>',
+                      '<div class=\"node-sub\"><span class=\"node-sub-line node-sub-gap-after\">', battDir, '</span><span class=\"node-sub-line\">SoC ', Math.round(batterySoc), '%</span></div>',
+                    '</div>'
+                  ].join('')
+                : ''),
               '<div class=\"ibep-flow-center ', (hasFlow ? 'live' : 'idle'), '\"></div>',
               '</div>'
             ].join('');
@@ -212,11 +220,17 @@ card:
           - border-radius: 24px
           - padding: 16px 16px 12px
           - border: 1px solid rgba(120, 220, 80, 0.90)
-          - background: radial-gradient(circle at 18% 14%, rgba(255, 185, 0, 0.32), transparent 40%), radial-gradient(circle at 84% 85%, rgba(0, 210, 255, 0.22), transparent 44%), radial-gradient(circle at 50% 88%, rgba(140, 230, 60, 0.18), transparent 48%), linear-gradient(145deg, rgba(38, 118, 58, 0.92), rgba(52, 148, 74, 0.90))
+          - background: >-
+              radial-gradient(circle at 18% 14%, rgba(255, 185, 0, 0.32),
+              transparent 40%), radial-gradient(circle at 84% 85%, rgba(0, 210,
+              255, 0.22), transparent 44%), radial-gradient(circle at 50% 88%,
+              rgba(140, 230, 60, 0.18), transparent 48%),
+              linear-gradient(145deg, rgba(38, 118, 58, 0.92), rgba(52, 148, 74,
+              0.90))
           - box-shadow: 0 8px 32px rgba(0, 0, 0, 0.58)
         name:
           - justify-self: center
-          - color: '#ffffff'
+          - color: "#ffffff"
           - font-size: 1.35rem
           - font-weight: 700
           - letter-spacing: 0.04em
@@ -226,7 +240,7 @@ card:
           - width: 100%
           - padding: 4px 6px 8px
         grid:
-          - grid-template-areas: '"logo" "n" "flow"'
+          - grid-template-areas: "\"logo\" \"n\" \"flow\""
           - grid-template-columns: 1fr
           - row-gap: 4px
         custom_fields:
@@ -236,17 +250,18 @@ card:
             - padding-top: 2px
           flow:
             - justify-self: stretch
-      extra_styles: |
+      extra_styles: >
         .ibep-brand-logo-wrap {
           display: inline-flex;
           align-items: center;
           justify-content: center;
           padding: 5px 9px;
           border-radius: 10px;
-          background: rgba(255, 255, 255, 0.07);
-          border: 1px solid rgba(0, 210, 255, 0.28);
-          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+          # background: rgba(255, 255, 255, 0.07);
+          # border: 1px solid rgba(0, 210, 255, 0.28);
+          # box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
         }
+
         .ibep-brand-logo {
           display: block;
           width: min(46vw, 180px);
@@ -254,6 +269,7 @@ card:
           height: auto;
           object-fit: contain;
         }
+
         .ibep-flow-wrap {
           position: relative;
           height: 356px;
@@ -267,6 +283,17 @@ card:
             linear-gradient(155deg, rgba(32, 106, 50, 0.94), rgba(46, 138, 66, 0.92));
           border: 1px solid rgba(140, 230, 90, 0.85);
         }
+        .ibep-flow-wrap.no-battery {
+          height: 252px;
+        }
+        .ibep-flow-wrap.no-battery .ibep-flow-center {
+          top: 178px;
+        }
+        .ibep-flow-wrap.no-battery .pipe-left,
+        .ibep-flow-wrap.no-battery .pipe-right {
+          top: calc(178px - 1.5px);
+        }
+
         .ibep-flow-wrap::before {
           content: "";
           position: absolute;
@@ -275,7 +302,8 @@ card:
           pointer-events: none;
           background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0px, rgba(255, 255, 255, 0.018) 1px, transparent 1px, transparent 28px);
         }
-    
+
+
         .ibep-flow-center {
           position: absolute;
           z-index: 4;
@@ -288,14 +316,17 @@ card:
           background: #00D2FF;
           box-shadow: 0 0 10px rgba(0, 210, 255, 0.72);
         }
+
         .ibep-flow-center.live {
           animation: centerBeat 1.6s ease-in-out infinite;
           box-shadow: 0 0 18px rgba(0, 210, 255, 0.95), 0 0 32px rgba(0, 180, 230, 0.48);
         }
+
         .ibep-flow-center.idle {
           opacity: 0.55;
         }
-    
+
+
         .ibep-flow-pipe {
           position: absolute;
           z-index: 1;
@@ -304,60 +335,79 @@ card:
           background: rgba(210, 220, 230, 0.18);
           box-shadow: inset 0 0 0 1px rgba(180, 200, 220, 0.22);
         }
+
         .ibep-flow-pipe.idle {
           opacity: 0.24;
         }
+
         .ibep-flow-pipe.active {
           opacity: 1;
           box-shadow: 0 0 10px var(--flow-glow, rgba(121, 188, 28, 0.5));
         }
-        .ibep-flow-pipe.solar { --flow-color: #FFB800; --flow-glow: rgba(255, 184, 0, 0.72); }
-        .ibep-flow-pipe.grid { --flow-color: #00D2FF; --flow-glow: rgba(0, 210, 255, 0.72); }
-        .ibep-flow-pipe.home { --flow-color: #78DC14; --flow-glow: rgba(120, 220, 20, 0.68); }
-        .ibep-flow-pipe.battery { --flow-color: #60CFFF; --flow-glow: rgba(96, 207, 255, 0.70); }
-    
+
+        .ibep-flow-pipe.solar { --flow-color: #FFB800; --flow-glow: rgba(255,
+        184, 0, 0.72); }
+
+        .ibep-flow-pipe.grid { --flow-color: #00D2FF; --flow-glow: rgba(0, 210,
+        255, 0.72); }
+
+        .ibep-flow-pipe.home { --flow-color: #78DC14; --flow-glow: rgba(120,
+        220, 20, 0.68); }
+
+        .ibep-flow-pipe.battery { --flow-color: #60CFFF; --flow-glow: rgba(96,
+        207, 255, 0.70); }
+
+
         .pipe-top {
           left: calc(50% - 1.5px);
           top: 138px;
           width: 3px;
           height: 40px;
         }
+
         .pipe-left {
           left: 140px;
           top: calc(50% - 1.5px);
           width: calc(50% - 140px);
           height: 3px;
         }
+
         .pipe-right {
           left: 50%;
           top: calc(50% - 1.5px);
           width: calc(50% - 140px);
           height: 3px;
         }
+
         .pipe-bottom {
           left: calc(50% - 1.5px);
           top: 50%;
           width: 3px;
           height: 36px;
         }
-    
+
+
         .ibep-flow-pipe.active.flow-right {
           background-image: repeating-linear-gradient(90deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 8px, var(--flow-color) 8px, var(--flow-color) 17px, rgba(255,255,255,0.9) 17px, rgba(255,255,255,0.9) 20px, rgba(255,255,255,0) 20px, rgba(255,255,255,0) 28px);
           animation: flowRight 1s linear infinite, pipeGlow 2s ease-in-out infinite;
         }
+
         .ibep-flow-pipe.active.flow-left {
           background-image: repeating-linear-gradient(90deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 8px, var(--flow-color) 8px, var(--flow-color) 17px, rgba(255,255,255,0.9) 17px, rgba(255,255,255,0.9) 20px, rgba(255,255,255,0) 20px, rgba(255,255,255,0) 28px);
           animation: flowLeft 1s linear infinite, pipeGlow 2s ease-in-out infinite;
         }
+
         .ibep-flow-pipe.active.flow-down {
           background-image: repeating-linear-gradient(180deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 8px, var(--flow-color) 8px, var(--flow-color) 17px, rgba(255,255,255,0.9) 17px, rgba(255,255,255,0.9) 20px, rgba(255,255,255,0) 20px, rgba(255,255,255,0) 28px);
           animation: flowDown 1.1s linear infinite, pipeGlow 2s ease-in-out infinite;
         }
+
         .ibep-flow-pipe.active.flow-up {
           background-image: repeating-linear-gradient(180deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 8px, var(--flow-color) 8px, var(--flow-color) 17px, rgba(255,255,255,0.9) 17px, rgba(255,255,255,0.9) 20px, rgba(255,255,255,0) 20px, rgba(255,255,255,0) 28px);
           animation: flowUp 1.1s linear infinite, pipeGlow 2s ease-in-out infinite;
         }
-    
+
+
         .ibep-flow-node {
           position: absolute;
           z-index: 3;
@@ -376,21 +426,26 @@ card:
           box-shadow: inset 0 0 22px rgba(255, 255, 255, 0.04), 0 4px 18px rgba(0,0,0,0.56);
           transition: transform 0.25s ease, box-shadow 0.25s ease, opacity 0.25s ease;
         }
+
         .ibep-flow-node.node-active {
           opacity: 1;
           animation: nodeBreathe 2.6s ease-in-out infinite;
           box-shadow: inset 0 0 24px rgba(255, 255, 255, 0.05), 0 0 20px var(--node-glow, rgba(120, 220, 20, 0.52));
         }
+
         .ibep-flow-node.node-idle {
           opacity: 0.82;
         }
+
         .node-solar {
           top: 6px;
           left: calc(50% - 66px);
           --node-accent: #FFB800;
           --node-glow: rgba(255, 184, 0, 0.62);
-          background: radial-gradient(circle at 34% 28%, rgba(70, 50, 10, 0.94), rgba(50, 35, 5, 0.96));
+          # background: radial-gradient(circle at 34% 28%, rgba(70, 50, 10, 0.94), rgba(50, 35, 5, 0.96));
+          background: radial-gradient(circle at 34% 28%, rgba(235, 202, 40, 0.94), rgba(50, 35, 5, 0.96));
         }
+
         .node-grid {
           top: 112px;
           left: 8px;
@@ -398,6 +453,7 @@ card:
           --node-glow: rgba(0, 210, 255, 0.60);
           background: radial-gradient(circle at 34% 28%, rgba(10, 40, 70, 0.94), rgba(5, 25, 50, 0.96));
         }
+
         .node-home {
           top: 112px;
           right: 8px;
@@ -405,6 +461,7 @@ card:
           --node-glow: rgba(120, 220, 20, 0.58);
           background: radial-gradient(circle at 34% 28%, rgba(30, 60, 10, 0.94), rgba(20, 40, 5, 0.96));
         }
+
         .node-battery {
           bottom: 6px;
           left: calc(50% - 66px);
@@ -412,7 +469,8 @@ card:
           --node-glow: rgba(96, 207, 255, 0.60);
           background: radial-gradient(circle at 34% 28%, rgba(10, 60, 60, 0.94), rgba(5, 40, 40, 0.96));
         }
-    
+
+
         .node-title {
           color: #8ee8ff;
           width: 100%;
@@ -425,6 +483,7 @@ card:
           text-shadow: 0 1px 3px rgba(0,0,0,0.7);
           margin-bottom: 3px;
         }
+
         .node-main {
           color: #ffffff;
           width: 100%;
@@ -438,6 +497,7 @@ card:
           overflow: hidden;
           text-overflow: ellipsis;
         }
+
         .node-sub {
           color: #60CFFF;
           width: 100%;
@@ -452,45 +512,65 @@ card:
           overflow-wrap: anywhere;
           word-break: break-word;
         }
+
         .node-sub-line {
           display: block;
         }
+
         .node-sub-gap-after {
           margin-bottom: 4px;
         }
-    
+
+
         @keyframes flowRight {
           0% { background-position: 0 0; }
           100% { background-position: 28px 0; }
         }
+
         @keyframes flowLeft {
           0% { background-position: 0 0; }
           100% { background-position: -28px 0; }
         }
+
         @keyframes flowDown {
           0% { background-position: 0 0; }
           100% { background-position: 0 28px; }
         }
+
         @keyframes flowUp {
           0% { background-position: 0 0; }
           100% { background-position: 0 -28px; }
         }
+
         @keyframes pipeGlow {
           0%, 100% { filter: brightness(1); }
           50% { filter: brightness(1.22); }
         }
+
         @keyframes centerBeat {
           0%, 100% { transform: translate(-50%, -50%) scale(1); }
           50% { transform: translate(-50%, -50%) scale(1.16); }
         }
+
         @keyframes nodeBreathe {
           0%, 100% { transform: translateY(0px); }
           50% { transform: translateY(-2px); }
         }
-    
+
+
         @media (max-width: 540px) {
           .ibep-flow-wrap {
             height: 330px;
+          }
+          .ibep-flow-wrap.no-battery {
+            height: 230px;
+          }
+          .ibep-flow-wrap.no-battery .ibep-flow-center {
+            top: 164px;
+          }
+          .ibep-flow-wrap.no-battery .pipe-left,
+          .ibep-flow-wrap.no-battery .pipe-right {
+            top: calc(164px - 1.5px);
           }
           .ibep-flow-node {
             width: 116px;
@@ -538,6 +618,179 @@ card:
           }
         }
     - type: custom:button-card
+      entity: ${'sensor.' + vars[0] + '_pv1_voltage'}
+      show_icon: false
+      show_name: false
+      show_state: false
+      variables:
+        base: ${vars[0]}
+      triggers_update:
+        - ${'sensor.' + vars[0] + '_pv1_voltage'}
+        - ${'sensor.pv1_voltage_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_pv1_current'}
+        - ${'sensor.pv1_current_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_pv1_power'}
+        - ${'sensor.pv1_power_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_pv2_voltage'}
+        - ${'sensor.pv2_voltage_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_pv2_current'}
+        - ${'sensor.pv2_current_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_pv2_power'}
+        - ${'sensor.pv2_power_' + vars[0]}
+      custom_fields:
+        pv_strings: |
+          [[[
+            const base = variables.base;
+            const safeStates = (states && typeof states === 'object') ? states : {};
+            const invalidState = (state) => {
+              const s = String(state ?? '').trim().toLowerCase();
+              return !s || s === 'unknown' || s === 'unavailable' || s === 'none' || s === 'null';
+            };
+            const getObj = (field) => {
+              const a = safeStates['sensor.' + base + '_' + field];
+              const b = safeStates['sensor.' + field + '_' + base];
+              const obj = a || b;
+              if (!obj || invalidState(obj.state)) return null;
+              return obj;
+            };
+            const toNum = (value) => {
+              const n = Number(String(value ?? '').replace(',', '.'));
+              return Number.isFinite(n) ? n : null;
+            };
+            const fmt = (value, decimals) => value === null ? '--' : value.toFixed(decimals);
+            const buildStringCard = (label, key) => {
+              const vObj = getObj(key + '_voltage');
+              const aObj = getObj(key + '_current');
+              const wObj = getObj(key + '_power');
+              const metricHtml = (obj, decimals, unit) => {
+                if (!obj) return '';
+                const value = toNum(obj.state);
+                return '<span class="ibep-pv-metric"><span class="ibep-pv-val">' + fmt(value, decimals) + '</span><span class="ibep-pv-key">' + unit + '</span></span>';
+              };
+              const metrics = [
+                metricHtml(vObj, 1, 'V'),
+                metricHtml(aObj, 1, 'A'),
+                metricHtml(wObj, 0, 'W')
+              ].filter(Boolean);
+              if (!metrics.length) return null;
+              return [
+                '<div class="ibep-pv-pill">',
+                  '<span class="ibep-pv-title">', label, '</span>',
+                  '<div class="ibep-pv-metrics">',
+                    metrics.join(''),
+                  '</div>',
+                '</div>'
+              ].join('');
+            };
+            const cards = [
+              buildStringCard('PV1', 'pv1'),
+              buildStringCard('PV2', 'pv2')
+            ].filter(Boolean);
+            if (!cards.length) return '';
+            return '<div class="ibep-pv-wrap">' + cards.join('') + '</div>';
+          ]]]
+      styles:
+        card:
+          - border-radius: 14px
+          - margin-top: 2px
+          - padding: 10px 12px 8px
+          - background: >-
+              linear-gradient(145deg, rgba(40, 130, 60, 0.88), rgba(55, 160, 75,
+              0.84))
+          - border: 1px solid rgba(120, 220, 80, 0.90)
+          - display: |
+              [[[
+                const base = variables.base;
+                const safeStates = (states && typeof states === 'object') ? states : {};
+                const hasEntity = (field) => {
+                  const obj = safeStates['sensor.' + base + '_' + field] || safeStates['sensor.' + field + '_' + base];
+                  if (!obj) return false;
+                  const s = String(obj.state ?? '').trim().toLowerCase();
+                  return !!s && s !== 'unknown' && s !== 'unavailable' && s !== 'none' && s !== 'null';
+                };
+                const hasPv1 = hasEntity('pv1_voltage') || hasEntity('pv1_current') || hasEntity('pv1_power');
+                const hasPv2 = hasEntity('pv2_voltage') || hasEntity('pv2_current') || hasEntity('pv2_power');
+                return (hasPv1 || hasPv2) ? 'block' : 'none';
+              ]]]
+        grid:
+          - grid-template-areas: "\"pv_strings\""
+          - grid-template-columns: 1fr
+          - grid-template-rows: auto
+        custom_fields:
+          pv_strings:
+            - justify-self: stretch
+            - width: 100%
+      extra_styles: |
+        .ibep-pv-wrap {
+          display: flex;
+          flex-wrap: nowrap;
+          align-items: stretch;
+          justify-content: stretch;
+          gap: 8px;
+          width: 100%;
+        }
+        .ibep-pv-pill {
+          display: flex;
+          flex-direction: column;
+          align-items: stretch;
+          justify-content: center;
+          gap: 6px;
+          flex: 1 1 0;
+          min-width: 0;
+          padding: 6px 8px;
+          border-radius: 10px;
+          background: linear-gradient(145deg, rgba(35, 115, 55, 0.92), rgba(55, 150, 75, 0.88));
+          border: 1px solid rgba(140, 230, 90, 0.85);
+        }
+        .ibep-pv-title {
+          color: #60CFFF;
+          font-size: 0.68rem;
+          font-weight: 600;
+          letter-spacing: 0.02em;
+          text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+          text-align: center;
+          width: 100%;
+        }
+        .ibep-pv-metrics {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+          gap: 6px;
+          width: 100%;
+        }
+        .ibep-pv-metric {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          justify-content: center;
+          min-width: 0;
+          padding: 4px 2px;
+          gap: 4px;
+          font-family: var(--primary-font-family, inherit);
+          font-size: 0.72rem;
+          font-weight: 700;
+          line-height: 1.15;
+          font-variant-numeric: tabular-nums;
+          border-radius: 8px;
+          background: rgba(10, 55, 25, 0.30);
+          border: 1px solid rgba(120, 220, 80, 0.35);
+        }
+        .ibep-pv-key {
+          color: #ffffff;
+          font: inherit;
+          display: inline-block;
+          min-width: 1.2ch;
+          text-align: left;
+        }
+        .ibep-pv-val {
+          color: #ffffff;
+          font: inherit;
+          display: inline-block;
+          min-width: 4.6ch;
+          text-align: right;
+          text-shadow: 0 1px 3px rgba(0,0,0,0.45);
+          white-space: nowrap;
+        }
+    - type: custom:button-card
       entity: ${'sensor.' + vars[0] + '_ibepower_temperature'}
       show_icon: false
       show_name: false
@@ -560,10 +813,11 @@ card:
         - ${'sensor.' + vars[0] + '_custom_sensor_name'}
         - ${'sensor.custom_sensor_name_' + vars[0]}
       custom_fields:
-        temps: >
+        temps: |
           [[[ 
             const base = variables.base;
-            const getObj = (field) => states['sensor.' + base + '_' + field] || states['sensor.' + field + '_' + base];
+            const safeStates = (states && typeof states === 'object') ? states : {};
+            const getObj = (field) => safeStates['sensor.' + base + '_' + field] || safeStates['sensor.' + field + '_' + base];
             const toNum = (value) => {
               const n = Number(String(value ?? '').replace(',', '.'));
               return Number.isFinite(n) ? n : null;
@@ -613,10 +867,12 @@ card:
           - border-radius: 14px
           - margin-top: 2px
           - padding: 10px 12px 8px
-          - background: linear-gradient(145deg, rgba(40, 130, 60, 0.88), rgba(55, 160, 75, 0.84))
+          - background: >-
+              linear-gradient(145deg, rgba(40, 130, 60, 0.88), rgba(55, 160, 75,
+              0.84))
           - border: 1px solid rgba(120, 220, 80, 0.90)
         grid:
-          - grid-template-areas: '"temps"'
+          - grid-template-areas: "\"temps\""
           - grid-template-columns: 1fr
           - grid-template-rows: auto
         custom_fields:
@@ -653,7 +909,7 @@ card:
           box-shadow: 0 0 6px rgba(255,255,255,0.35);
         }
         .ibep-temp-label {
-          color: #d0f8e8;
+          color: #60CFFF;
           font-size: 0.68rem;
           font-weight: 600;
           letter-spacing: 0.02em;
@@ -685,7 +941,12 @@ card:
           square: false
           cards:
             - type: custom:button-card
-              entity: ${((states['switch.' + vars[0] + '_ibediv']) && ('switch.' + vars[0] + '_ibediv')) || ((states['switch.ibediv_' + vars[0]]) && ('switch.ibediv_' + vars[0])) || ((states['switch.' + vars[0] + '_switch_on_off']) && ('switch.' + vars[0] + '_switch_on_off')) || ('switch.switch_on_off_' + vars[0])}
+              entity: >-
+                ${((states['switch.' + vars[0] + '_ibediv']) && ('switch.' +
+                vars[0] + '_ibediv')) || ((states['switch.ibediv_' + vars[0]])
+                && ('switch.ibediv_' + vars[0])) || ((states['switch.' + vars[0]
+                + '_switch_on_off']) && ('switch.' + vars[0] +
+                '_switch_on_off')) || ('switch.switch_on_off_' + vars[0])}
               show_icon: false
               show_name: true
               show_state: true
@@ -701,7 +962,7 @@ card:
                 - ${'select.modo_de_trabajo_' + vars[0]}
                 - ${'select.' + vars[0] + '_work_mode_select'}
                 - ${'select.work_mode_select_' + vars[0]}
-              name: >
+              name: |
                 [[[
                   const rawLang = String(
                     hass?.language ||
@@ -715,7 +976,7 @@ card:
                   if (lang === 'pt') return 'Gestor';
                   return 'Manager';
                 ]]]
-              state_display: >
+              state_display: |
                 [[[
                   const rawLang = String(
                     hass?.language ||
@@ -737,37 +998,43 @@ card:
                   - border-radius: 10px
                   - padding: 8px 6px
                   - min-height: 58px
-                  - background: >
+                  - background: |
                       [[[
                         return entity?.state === 'on'
                           ? 'linear-gradient(145deg, rgba(52, 138, 24, 0.92), rgba(36, 108, 16, 0.90))'
                           : 'linear-gradient(145deg, rgba(16, 50, 24, 0.90), rgba(12, 38, 18, 0.88))';
                       ]]]
-                  - border: >
+                  - border: |
                       [[[
                         return entity?.state === 'on'
                           ? '1px solid rgba(120, 220, 20, 0.86)'
                           : '1px solid rgba(0, 210, 255, 0.46)';
                       ]]]
-                  - box-shadow: >
+                  - box-shadow: |
                       [[[
                         return entity?.state === 'on'
                           ? '0 0 14px rgba(120, 220, 20, 0.34), inset 0 0 20px rgba(120,220,20,0.18)'
                           : 'none';
                       ]]]
                 name:
-                  - color: '#60CFFF'
+                  - color: "#60CFFF"
                   - font-size: 0.80rem
                   - font-weight: 600
                   - letter-spacing: 0.02em
-                  - text-shadow: '0 1px 3px rgba(0,0,0,0.8)'
+                  - text-shadow: 0 1px 3px rgba(0,0,0,0.8)
                 state:
-                  - color: '#ffffff'
+                  - color: "#ffffff"
                   - font-size: 0.96rem
                   - font-weight: 700
-                  - text-shadow: '0 1px 4px rgba(0,0,0,0.7)'
+                  - text-shadow: 0 1px 4px rgba(0,0,0,0.7)
             - type: custom:button-card
-              entity: ${((states['select.' + vars[0] + '_modo_de_trabajo']) && ('select.' + vars[0] + '_modo_de_trabajo')) || ((states['select.modo_de_trabajo_' + vars[0]]) && ('select.modo_de_trabajo_' + vars[0])) || ((states['select.' + vars[0] + '_work_mode_select']) && ('select.' + vars[0] + '_work_mode_select')) || ('select.work_mode_select_' + vars[0])}
+              entity: >-
+                ${((states['select.' + vars[0] + '_modo_de_trabajo']) &&
+                ('select.' + vars[0] + '_modo_de_trabajo')) ||
+                ((states['select.modo_de_trabajo_' + vars[0]]) &&
+                ('select.modo_de_trabajo_' + vars[0])) || ((states['select.' +
+                vars[0] + '_work_mode_select']) && ('select.' + vars[0] +
+                '_work_mode_select')) || ('select.work_mode_select_' + vars[0])}
               show_icon: false
               show_name: true
               show_state: true
@@ -783,7 +1050,7 @@ card:
                 - ${'select.modo_de_trabajo_' + vars[0]}
                 - ${'select.' + vars[0] + '_work_mode_select'}
                 - ${'select.work_mode_select_' + vars[0]}
-              name: >
+              name: |
                 [[[
                   const rawLang = String(
                     hass?.language ||
@@ -797,7 +1064,7 @@ card:
                   if (lang === 'pt') return 'Modo';
                   return 'Mode';
                 ]]]
-              state_display: >
+              state_display: |
                 [[[
                   const base = variables.base;
                   const managerObj =
@@ -832,7 +1099,7 @@ card:
                   return manual ? 'Manual' : 'Auto';
                 ]]]
               tap_action:
-                action: >
+                action: |
                   [[[
                     const base = variables.base;
                     const managerObj =
@@ -844,11 +1111,11 @@ card:
                   ]]]
                 service: select.select_option
                 service_data:
-                  entity_id: >
+                  entity_id: |
                     [[[
                       return entity?.entity_id || ('select.' + variables.base + '_modo_de_trabajo');
                     ]]]
-                  option: >
+                  option: |
                     [[[
                       const raw = String(entity?.state ?? '').toUpperCase();
                       return raw.startsWith('MAN') ? 'AUTO' : 'MANUAL';
@@ -858,7 +1125,7 @@ card:
                   - border-radius: 10px
                   - padding: 8px 6px
                   - min-height: 58px
-                  - background: >
+                  - background: |
                       [[[
                         const base = variables.base;
                         const managerObj =
@@ -872,10 +1139,10 @@ card:
                           return 'linear-gradient(145deg, rgba(28, 24, 12, 0.72), rgba(20, 18, 8, 0.70))';
                         }
                         return manual
-                          ? 'linear-gradient(145deg, rgba(160, 110, 0, 0.90), rgba(120, 78, 0, 0.88))'
-                          : 'linear-gradient(145deg, rgba(110, 78, 0, 0.78), rgba(78, 56, 0, 0.76))';
+                          ? 'linear-gradient(145deg, rgba(210, 180, 30, 0.92), rgba(180, 150, 20, 0.90))'
+                          : 'linear-gradient(145deg, rgba(52, 138, 24, 0.92), rgba(36, 108, 16, 0.90))';
                       ]]]
-                  - border: >
+                  - border: |
                       [[[
                         const base = variables.base;
                         const managerObj =
@@ -892,7 +1159,7 @@ card:
                           ? '1px solid rgba(255, 195, 0, 0.92)'
                           : '1px solid rgba(220, 165, 0, 0.68)';
                       ]]]
-                  - box-shadow: >
+                  - box-shadow: |
                       [[[
                         const base = variables.base;
                         const managerObj =
@@ -907,7 +1174,7 @@ card:
                           ? '0 0 16px rgba(255, 185, 0, 0.42), inset 0 0 18px rgba(255,185,0,0.20)'
                           : '0 0 8px rgba(200, 155, 0, 0.22), inset 0 0 12px rgba(200,155,0,0.10)';
                       ]]]
-                  - opacity: >
+                  - opacity: |
                       [[[
                         const base = variables.base;
                         const managerObj =
@@ -917,7 +1184,7 @@ card:
                           states['switch.switch_on_off_' + base];
                         return managerObj?.state === 'on' ? '1' : '0.58';
                       ]]]
-                  - pointer-events: >
+                  - pointer-events: |
                       [[[
                         const base = variables.base;
                         const managerObj =
@@ -928,18 +1195,23 @@ card:
                         return managerObj?.state === 'on' ? 'auto' : 'none';
                       ]]]
                 name:
-                  - color: '#60CFFF'
+                  - color: "#60CFFF"
                   - font-size: 0.80rem
                   - font-weight: 600
                   - letter-spacing: 0.02em
-                  - text-shadow: '0 1px 3px rgba(0,0,0,0.8)'
+                  - text-shadow: 0 1px 3px rgba(0,0,0,0.8)
                 state:
-                  - color: '#ffffff'
+                  - color: "#ffffff"
                   - font-size: 0.96rem
                   - font-weight: 700
-                  - text-shadow: '0 1px 4px rgba(0,0,0,0.7)'
+                  - text-shadow: 0 1px 4px rgba(0,0,0,0.7)
         - type: custom:button-card
-          entity: "${((states['number.' + vars[0] + '_manual']) && ('number.' + vars[0] + '_manual')) || ((states['number.manual_' + vars[0]]) && ('number.manual_' + vars[0])) || ((states['number.' + vars[0] + '_pwm_value_setter']) && ('number.' + vars[0] + '_pwm_value_setter')) || ('number.pwm_value_setter_' + vars[0])}"
+          entity: >-
+            ${((states['number.' + vars[0] + '_manual']) && ('number.' + vars[0]
+            + '_manual')) || ((states['number.manual_' + vars[0]]) &&
+            ('number.manual_' + vars[0])) || ((states['number.' + vars[0] +
+            '_pwm_value_setter']) && ('number.' + vars[0] +
+            '_pwm_value_setter')) || ('number.pwm_value_setter_' + vars[0])}
           show_icon: false
           show_name: false
           show_state: false
@@ -963,7 +1235,7 @@ card:
             - ${'number.' + vars[0] + '_pwm_value_setter'}
             - ${'number.pwm_value_setter_' + vars[0]}
           custom_fields:
-            slider: >
+            slider: |
               [[[
                 try {
                   const base = variables.base;
@@ -1010,7 +1282,7 @@ card:
               ]]]
           styles:
             card:
-              - margin-top: >
+              - margin-top: |
                   [[[
                     const base = variables.base;
                     const managerObj =
@@ -1038,7 +1310,7 @@ card:
                     } catch (e) {}
                     return uiMode === 'MANUAL' ? '6px' : '0';
                   ]]]
-              - display: >
+              - display: |
                   [[[
                     const base = variables.base;
                     const managerObj =
@@ -1066,7 +1338,7 @@ card:
                     } catch (e) {}
                     return uiMode === 'MANUAL' ? 'block' : 'none';
                   ]]]
-              - opacity: >
+              - opacity: |
                   [[[
                     const base = variables.base;
                     const managerObj =
@@ -1076,7 +1348,7 @@ card:
                       states['switch.switch_on_off_' + base];
                     return managerObj?.state === 'on' ? '1' : '0.56';
                   ]]]
-              - pointer-events: >
+              - pointer-events: |
                   [[[
                     const base = variables.base;
                     const managerObj =
@@ -1092,7 +1364,7 @@ card:
               - border: none
               - box-shadow: none
             grid:
-              - grid-template-areas: '"slider"'
+              - grid-template-areas: "\"slider\""
               - grid-template-columns: 1fr
               - grid-template-rows: auto
             custom_fields:
