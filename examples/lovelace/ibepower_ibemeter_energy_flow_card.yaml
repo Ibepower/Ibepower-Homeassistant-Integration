@@ -1,0 +1,512 @@
+type: custom:config-template-card
+variables:
+  - "'ibemeter'"
+  - "'/ibepower_static/ibepower_logo.png'"
+entities:
+  - ${'sensor.' + vars[0] + '_solar_watts'}
+  - ${'sensor.solar_watts_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_grid_watts'}
+  - ${'sensor.grid_watts_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_grid_voltage'}
+  - ${'sensor.grid_voltage_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_grid_current'}
+  - ${'sensor.grid_current_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_grid_frequency'}
+  - ${'sensor.grid_frequency_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_kw_solar_today'}
+  - ${'sensor.kw_solar_today_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_kw_import_today'}
+  - ${'sensor.kw_import_today_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_kw_export_today'}
+  - ${'sensor.kw_export_today_' + vars[0]}
+card:
+  type: vertical-stack
+  cards:
+    - type: custom:button-card
+      entity: >-
+        ${((states['sensor.' + vars[0] + '_grid_watts']) && ('sensor.' +
+        vars[0] + '_grid_watts')) || ('sensor.grid_watts_' + vars[0])}
+      name: ${('' + vars[0]).toUpperCase()}
+      show_icon: false
+      show_state: false
+      show_label: false
+      variables:
+        base: ${vars[0]}
+        logo_src: ${vars[1]}
+      triggers_update: all
+      custom_fields:
+        logo: |
+          [[[
+            const toUrl = (p) => {
+              if (hass && typeof hass.hassUrl === 'function') return hass.hassUrl(p);
+              return p;
+            };
+            const primary = String(variables.logo_src || '/ibepower_static/ibepower_logo.png');
+            const fallback = '/local/ibepower_logo.png';
+            const src = toUrl(primary);
+            const fallbackSrc = toUrl(fallback);
+            return '<div class="ibep-brand-logo-wrap"><img class="ibep-brand-logo" src="' + src + '" data-fallback="' + fallbackSrc + '" onerror="if(!this.dataset.err){this.dataset.err=\'1\';this.src=this.dataset.fallback;}" alt="Ibepower"></div>';
+          ]]]
+        flow: |
+          [[[
+            const base = variables.base;
+            const safeStates = (states && typeof states === 'object') ? states : {};
+            const invalidState = (state) => {
+              const s = String(state ?? '').trim().toLowerCase();
+              return !s || s === 'unknown' || s === 'unavailable' || s === 'none' || s === 'null';
+            };
+            const getObj = (field) => safeStates['sensor.' + base + '_' + field] || safeStates['sensor.' + field + '_' + base];
+            const getRaw = (field) => getObj(field)?.state;
+            const hasEntity = (field) => {
+              const obj = getObj(field);
+              return !!obj && !invalidState(obj.state);
+            };
+            const num = (field) => {
+              const raw = String(getRaw(field) ?? '').replace(',', '.');
+              const v = Number(raw);
+              return Number.isFinite(v) ? v : 0;
+            };
+            const fmtAbsW = (v) => Math.round(Math.abs(v)) + ' W';
+            const fmtSignedW = (v) => {
+              const n = Math.round(v);
+              if (!Number.isFinite(n)) return '-- W';
+              return n + ' W';
+            };
+            const fmtK = (v) => {
+              const n = Number(v);
+              return Number.isFinite(n) ? (n.toFixed(2) + ' kWh') : '-- kWh';
+            };
+            const fmtUnit = (v, unit, digits) => {
+              const n = Number(v);
+              return Number.isFinite(n) ? (n.toFixed(digits) + ' ' + unit) : ('-- ' + unit);
+            };
+
+            const solarW = num('solar_watts');
+            const gridW = num('grid_watts');
+            const homeW = solarW - gridW;
+
+            const solarK = hasEntity('kw_solar_today') ? num('kw_solar_today') : null;
+            const importK = hasEntity('kw_import_today') ? num('kw_import_today') : null;
+            const exportK = hasEntity('kw_export_today') ? num('kw_export_today') : null;
+            const gridV = hasEntity('grid_voltage') ? num('grid_voltage') : null;
+            const gridC = hasEntity('grid_current') ? num('grid_current') : null;
+            const gridF = hasEntity('grid_frequency') ? num('grid_frequency') : null;
+
+            const browserLang = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : '';
+            const rawLang = String(
+              hass?.language ||
+              hass?.selectedLanguage ||
+              hass?.locale?.language ||
+              browserLang ||
+              'en'
+            ).toLowerCase();
+            const lang = rawLang.startsWith('es')
+              ? 'es'
+              : rawLang.startsWith('pt')
+                ? 'pt'
+                : rawLang.startsWith('en')
+                  ? 'en'
+                  : 'en';
+            const i18n = {
+              es: {
+                importing: 'Importando',
+                exporting: 'Exportando',
+                imp: 'Imp',
+                exp: 'Exp',
+                consumption: 'Consumo'
+              },
+              en: {
+                importing: 'Importing',
+                exporting: 'Exporting',
+                imp: 'Imp',
+                exp: 'Exp',
+                consumption: 'Consumption'
+              },
+              pt: {
+                importing: 'Importando',
+                exporting: 'Exportando',
+                imp: 'Imp',
+                exp: 'Exp',
+                consumption: 'Consumo'
+              }
+            };
+            const t = i18n[lang] || i18n.en;
+
+            const hasSolar = hasEntity('solar_watts');
+            const hasGrid = hasEntity('grid_watts');
+
+            const solarActive = hasSolar && Math.abs(solarW) > 0;
+            const gridActive = hasGrid && Math.abs(gridW) > 0;
+            const homeActive = Math.abs(homeW) > 0;
+
+            const gridDirText = hasGrid ? (gridW >= 0 ? t.exporting : t.importing) : '';
+
+            const solarMain = hasSolar ? fmtAbsW(solarW) : '-- W';
+            const gridMain = hasGrid ? fmtSignedW(gridW) : '-- W';
+            const homeMain = fmtAbsW(homeW);
+
+            const solarSubText = fmtK(solarK);
+            const gridImpText = t.imp + '. ' + fmtK(importK);
+            const gridExpText = t.exp + '. ' + fmtK(exportK);
+            const gridVCText = fmtUnit(gridV, 'V', 1) + ' (' + fmtUnit(gridC, 'A', 2) + ')';
+            const gridFText = fmtUnit(gridF, 'Hz', 2);
+
+            const hasSolarToday = hasEntity('kw_solar_today');
+            const hasImportToday = hasEntity('kw_import_today');
+            const hasExportToday = hasEntity('kw_export_today');
+
+            const solarEntityId = (getObj('solar_watts') || {}).entity_id || '';
+            const gridEntityId = (getObj('grid_watts') || {}).entity_id || '';
+
+            const cSolarGrid = 'link-solar-grid ' + (solarActive && gridW > 0 ? 'is-active flow-right' : 'is-idle');
+            const cSolarHome = 'link-solar-home ' + (solarActive && homeW > 0 ? 'is-active flow-right' : 'is-idle');
+            const cGridHome = 'link-grid-home ' + (gridActive && gridW < 0 ? 'is-active flow-right' : 'is-idle');
+
+            const parts = ['<div class="ibep-flow-viewport"><div class="ibep-flow-wrap">'];
+
+            if (hasSolar && hasGrid) parts.push('<div class="ibep-flow-connector ', cSolarGrid, '"></div>');
+            if (hasSolar) parts.push('<div class="ibep-flow-connector ', cSolarHome, '"></div>');
+            if (hasGrid) parts.push('<div class="ibep-flow-connector ', cGridHome, '"></div>');
+
+            if (hasSolar) {
+              parts.push(
+                '<div class="ibep-flow-node node-solar ', (solarActive ? 'node-active' : 'node-idle'), '" data-entity="', solarEntityId, '">',
+                  '<ha-icon class="node-icon" icon="mdi:solar-power"></ha-icon>',
+                  '<div class="node-main">', solarMain, '</div>',
+                  (hasSolarToday ? ('<div class="node-sub">' + solarSubText + '</div>') : ''),
+                '</div>'
+              );
+            }
+
+            if (hasGrid) {
+              parts.push(
+                '<div class="ibep-flow-node node-grid ', (gridActive ? 'node-active' : 'node-idle'), '" data-entity="', gridEntityId, '">',
+                  '<ha-icon class="node-icon" icon="mdi:transmission-tower"></ha-icon>',
+                  '<div class="node-main ', (gridW < 0 ? 'is-negative' : ''), '">', gridMain, '</div>',
+                  '<div class="node-sub">',
+                    '<span class="node-sub-line node-sub-title">', gridDirText || '--', '</span>',
+                    (hasImportToday ? ('<span class="node-sub-line">' + gridImpText + '</span>') : ''),
+                    (hasExportToday ? ('<span class="node-sub-line">' + gridExpText + '</span>') : ''),
+                  '</div>',
+                '</div>'
+              );
+            }
+
+            parts.push(
+              '<div class="ibep-flow-node node-home ', (homeActive ? 'node-active' : 'node-idle'), '" data-entity="', gridEntityId, '">',
+                '<ha-icon class="node-icon" icon="mdi:home-outline"></ha-icon>',
+                '<div class="node-main">', homeMain, '</div>',
+                '<div class="node-sub">',
+                  '<span class="node-sub-line">', gridVCText, '</span>',
+                  '<span class="node-sub-line">', gridFText, '</span>',
+                '</div>',
+              '</div>'
+            );
+
+            parts.push('</div></div>');
+
+            if (!window._ibepMeterFlowClickHandler) {
+              window._ibepMeterFlowClickHandler = true;
+              let _ibepTouchStart = null;
+              const IBEP_TAP_THRESHOLD = 10;
+              const ibepDispatch = (e, isTouchEnd) => {
+                const path = e.composedPath();
+                for (const el of path) {
+                  if (el.classList && el.classList.contains('ibep-flow-node') && el.hasAttribute && el.hasAttribute('data-entity')) {
+                    const eid = el.getAttribute('data-entity');
+                    if (eid) {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      if (isTouchEnd) el._ibepTouchHandled = Date.now();
+                      const ev = new CustomEvent('hass-more-info', {
+                        detail: { entityId: eid },
+                        bubbles: true,
+                        composed: true
+                      });
+                      el.dispatchEvent(ev);
+                    }
+                    break;
+                  }
+                }
+              };
+              document.addEventListener('touchstart', (e) => {
+                if (e.touches && e.touches.length > 0) {
+                  _ibepTouchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                }
+              }, true);
+              document.addEventListener('touchend', (e) => {
+                if (_ibepTouchStart && e.changedTouches && e.changedTouches.length > 0) {
+                  const dx = e.changedTouches[0].clientX - _ibepTouchStart.x;
+                  const dy = e.changedTouches[0].clientY - _ibepTouchStart.y;
+                  if (Math.abs(dx) > IBEP_TAP_THRESHOLD || Math.abs(dy) > IBEP_TAP_THRESHOLD) {
+                    _ibepTouchStart = null;
+                    return;
+                  }
+                }
+                _ibepTouchStart = null;
+                ibepDispatch(e, true);
+              }, true);
+              document.addEventListener('click', (e) => {
+                const path = e.composedPath();
+                for (const el of path) {
+                  if (el.classList && el.classList.contains('ibep-flow-node') && el._ibepTouchHandled && (Date.now() - el._ibepTouchHandled < 800)) return;
+                  if (el.classList && el.classList.contains('ibep-flow-node')) { ibepDispatch(e, false); return; }
+                }
+              }, true);
+            }
+
+            return parts.join('');
+          ]]]
+      styles:
+        card:
+          - border-radius: 24px
+          - padding: 16px 16px 12px
+          - border: 1px solid rgba(120, 220, 80, 0.90)
+          - background: >-
+              radial-gradient(circle at 18% 14%, rgba(255, 185, 0, 0.32),
+              transparent 40%), radial-gradient(circle at 84% 85%, rgba(0, 210,
+              255, 0.22), transparent 44%), radial-gradient(circle at 50% 88%,
+              rgba(140, 230, 60, 0.18), transparent 48%),
+              linear-gradient(145deg, rgba(38, 118, 58, 0.92), rgba(52, 148, 74,
+              0.90))
+          - box-shadow: 0 8px 32px rgba(0, 0, 0, 0.58)
+        name:
+          - justify-self: center
+          - color: "#ffffff"
+          - font-size: 1.35rem
+          - font-weight: 700
+          - letter-spacing: 0.04em
+          - text-transform: uppercase
+          - text-align: center
+          - text-shadow: 0 1px 4px rgba(0,0,0,0.55)
+          - width: 100%
+          - padding: 4px 6px 8px
+        grid:
+          - grid-template-areas: "\"logo\" \"n\" \"flow\""
+          - grid-template-columns: 1fr
+          - row-gap: 4px
+        custom_fields:
+          logo:
+            - justify-self: center
+            - width: 100%
+            - padding-top: 2px
+          flow:
+            - justify-self: stretch
+      extra_styles: |
+        .ibep-brand-logo-wrap {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 5px 9px;
+          border-radius: 10px;
+        }
+        .ibep-brand-logo {
+          display: block;
+          width: min(46vw, 180px);
+          max-width: 100%;
+          height: auto;
+          object-fit: contain;
+        }
+        .ibep-flow-viewport {
+          position: relative;
+          width: min(100%, 460px);
+          aspect-ratio: 1.2 / 1;
+          height: auto;
+          min-height: 252px;
+          margin: 2px auto 0;
+          border-radius: 16px;
+          overflow: hidden;
+          background: rgba(10, 18, 28, 0.35);
+          border: 1px solid rgba(255, 255, 255, 0.10);
+        }
+        .ibep-flow-wrap {
+          position: relative;
+          width: 100%;
+          aspect-ratio: 1 / 1;
+          height: auto;
+          min-height: 0;
+        }
+        .ibep-flow-connector {
+          position: absolute;
+          z-index: 1;
+          border-radius: 999px;
+          --link-color: rgba(120, 132, 152, 0.24);
+          background: var(--link-color);
+          transition: opacity 0.2s ease;
+          background-image: repeating-linear-gradient(90deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 7px, var(--link-color) 7px, var(--link-color) 14px, rgba(255,255,255,0.8) 14px, rgba(255,255,255,0.8) 17px, rgba(255,255,255,0) 17px, rgba(255,255,255,0) 24px);
+        }
+        .ibep-flow-connector.is-idle {
+          opacity: 0.28;
+        }
+        .ibep-flow-connector.is-active {
+          opacity: 0.85;
+        }
+        .ibep-flow-connector.flow-right.is-active {
+          animation: flowRight 1.05s linear infinite, pipeGlow 1.9s ease-in-out infinite;
+        }
+        .ibep-flow-connector.flow-left.is-active {
+          animation: flowLeft 1.05s linear infinite, pipeGlow 1.9s ease-in-out infinite;
+        }
+        .ibep-flow-connector.flow-down.is-active {
+          background-image: repeating-linear-gradient(180deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 7px, var(--link-color) 7px, var(--link-color) 14px, rgba(255,255,255,0.8) 14px, rgba(255,255,255,0.8) 17px, rgba(255,255,255,0) 17px, rgba(255,255,255,0) 24px);
+          animation: flowDown 1.05s linear infinite, pipeGlow 1.9s ease-in-out infinite;
+        }
+        .link-solar-grid {
+          --link-color: rgba(255, 196, 61, 0.45);
+          left: 20%;
+          top: calc(20% - 1px);
+          width: 60%;
+          height: 2px;
+        }
+        .link-solar-home {
+          --link-color: rgba(66, 153, 255, 0.45);
+          left: 20%;
+          top: calc(20% - 1px);
+          width: 54%;
+          height: 2px;
+          transform-origin: left center;
+          transform: rotate(56.31deg);
+        }
+        .link-grid-home {
+          --link-color: rgba(156, 118, 255, 0.45);
+          left: 80%;
+          top: calc(20% - 1px);
+          width: 54%;
+          height: 2px;
+          transform-origin: left center;
+          transform: rotate(123.69deg);
+        }
+        .ibep-flow-node {
+          position: absolute;
+          z-index: 3;
+          width: min(130px, 28%);
+          height: min(130px, 28%);
+          transform: translate(-50%, -50%);
+          border-radius: 50%;
+          display: grid;
+          grid-template-rows: 24px minmax(0, auto) minmax(0, auto);
+          align-content: center;
+          justify-items: center;
+          align-items: center;
+          text-align: center;
+          padding: 8px 9px 10px;
+          box-sizing: border-box;
+          border: 2px solid var(--node-accent, #9aa5b8);
+          background: rgba(255, 255, 255, 0.88);
+          backdrop-filter: blur(4px);
+          -webkit-backdrop-filter: blur(4px);
+          box-shadow: 0 2px 9px rgba(0, 0, 0, 0.25);
+          cursor: pointer;
+        }
+        .ibep-flow-node.node-active {
+          opacity: 1;
+          animation: nodeFlash 1.8s ease-in-out 1;
+        }
+        .ibep-flow-node.node-idle {
+          opacity: 0.92;
+        }
+        .node-solar {
+          top: 20%;
+          left: 20%;
+          --node-accent: #d8b548;
+          --node-main: #8a6d00;
+        }
+        .node-grid {
+          top: 20%;
+          left: 80%;
+          --node-accent: #8660ce;
+          --node-main: #5a3d9e;
+        }
+        .node-home {
+          top: 65%;
+          left: 50%;
+          --node-accent: #2f6fe8;
+          --node-main: #1a56b0;
+        }
+        .node-home .node-sub {
+          margin-top: 6px;
+        }
+        .node-icon {
+          color: var(--node-accent, #7e8aa0);
+          --mdc-icon-size: 26px;
+          margin: 0;
+          align-self: center;
+          justify-self: center;
+        }
+        .node-main {
+          color: var(--node-main, #2c3447);
+          width: 100%;
+          max-width: 100%;
+          font-size: clamp(1.18rem, 3.5vw, 1.44rem);
+          font-weight: 700;
+          line-height: 1.02;
+          margin-top: 3px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .node-main.is-negative {
+          color: #c0392b;
+        }
+        .node-sub {
+          margin-top: 2px;
+          font-size: clamp(0.56rem, 1.7vw, 0.66rem);
+          font-weight: 600;
+          line-height: 1.07;
+          color: rgba(0, 0, 0, 0.6);
+          width: 100%;
+          max-width: 100%;
+        }
+        .node-sub-line:first-child {
+          margin-bottom: 3px;
+        }
+        .node-sub-line {
+          display: block;
+          width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .node-sub-title {
+          font-weight: 700;
+          color: var(--node-accent, #7e8aa0);
+        }
+        @keyframes flowRight {
+          0% { background-position: 0 0; }
+          100% { background-position: 24px 0; }
+        }
+        @keyframes flowLeft {
+          0% { background-position: 0 0; }
+          100% { background-position: -24px 0; }
+        }
+        @keyframes flowDown {
+          0% { background-position: 0 0; }
+          100% { background-position: 0 24px; }
+        }
+        @keyframes pipeGlow {
+          0%, 100% { filter: brightness(1); }
+          50% { filter: brightness(1.2); }
+        }
+        @keyframes nodeFlash {
+          0%, 100% { box-shadow: 0 2px 9px rgba(0, 0, 0, 0.25); }
+          50% { box-shadow: 0 2px 9px rgba(0, 0, 0, 0.25), 0 0 16px var(--node-accent, rgba(120, 132, 152, 0.45)); }
+        }
+        @media (max-width: 540px) {
+          .ibep-flow-viewport {
+            width: 100%;
+            min-height: 238px;
+          }
+          .ibep-flow-wrap {
+            width: 100%;
+            min-height: 0;
+          }
+          .ibep-flow-node {
+            width: min(112px, 29%);
+            height: min(112px, 29%);
+            grid-template-rows: 21px minmax(0, auto) minmax(0, auto);
+            padding: 6px 8px 8px;
+          }
+          .node-icon {
+            --mdc-icon-size: 22px;
+          }
+        }

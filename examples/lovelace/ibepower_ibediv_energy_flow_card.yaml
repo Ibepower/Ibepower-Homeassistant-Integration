@@ -85,8 +85,16 @@ card:
               const v = Number(raw);
               return Number.isFinite(v) ? v : 0;
             };
-            const fmtW = (v) => Math.round(Math.abs(v)) + ' W';
-            const fmtK = (v) => Number(v).toFixed(2) + ' kWh';
+            const fmtAbsW = (v) => Math.round(Math.abs(v)) + ' W';
+            const fmtSignedW = (v) => {
+              const n = Math.round(v);
+              if (!Number.isFinite(n)) return '-- W';
+              return n + ' W';
+            };
+            const fmtK = (v) => {
+              const n = Number(v);
+              return Number.isFinite(n) ? (n.toFixed(2) + ' kWh') : '-- kWh';
+            };
 
             const solarW = num('solar_watts');
             const gridW = num('grid_watts');
@@ -99,10 +107,10 @@ card:
             const pwmPct = Number.isFinite(pwmNum) ? Math.round(Math.max(0, Math.min(100, pwmNum))) : null;
             const pwmText = pwmPct === null ? '-- %' : (pwmPct + ' %');
 
-            const solarK = num('kw_solar_today');
-            const importK = num('kw_import_today');
-            const exportK = num('kw_export_today');
-            const diverterK = num('kw_diverter_today');
+            const solarK = hasEntity('kw_solar_today') ? num('kw_solar_today') : null;
+            const importK = hasEntity('kw_import_today') ? num('kw_import_today') : null;
+            const exportK = hasEntity('kw_export_today') ? num('kw_export_today') : null;
+            const diverterK = hasEntity('kw_diverter_today') ? num('kw_diverter_today') : null;
 
             const browserLang = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : '';
             const rawLang = String(
@@ -121,10 +129,6 @@ card:
                   : 'en';
             const i18n = {
               es: {
-                solar: 'Solar',
-                grid: 'Red',
-                home: 'Hogar',
-                battery: 'Bateria',
                 charging: 'Cargando',
                 discharging: 'Descargando',
                 importing: 'Importando',
@@ -132,13 +136,10 @@ card:
                 imp: 'Imp',
                 exp: 'Exp',
                 diverter: 'Derivando',
-                diverterToday: 'Derivado Hoy'
+                diverterToday: 'Derivado Hoy',
+                inverter: 'Inversor'
               },
               en: {
-                solar: 'Solar',
-                grid: 'Grid',
-                home: 'Home',
-                battery: 'Battery',
                 charging: 'Charging',
                 discharging: 'Discharging',
                 importing: 'Importing',
@@ -146,74 +147,217 @@ card:
                 imp: 'Imp',
                 exp: 'Exp',
                 diverter: 'Diverter',
-                diverterToday: 'Diverted Today'
+                diverterToday: 'Diverted Today',
+                inverter: 'Inverter'
               },
               pt: {
-                solar: 'Solar',
-                grid: 'Rede',
-                home: 'Casa',
-                battery: 'Bateria',
                 charging: 'Carregando',
                 discharging: 'Descarregando',
                 importing: 'Importando',
                 exporting: 'Exportando',
                 imp: 'Imp',
                 exp: 'Exp',
-                diverter: 'Diverter',
-                diverterToday: 'Derivado Hoje'
+                diverter: 'Derivando',
+                diverterToday: 'Derivado Hoje',
+                inverter: 'Inversor'
               }
             };
             const t = i18n[lang] || i18n.en;
 
-            const battDir = batteryW >= 0 ? t.charging : t.discharging;
-            const gridDir = gridW >= 0 ? t.exporting : t.importing;
-            const showBatteryNode = hasEntity('battery_power') || hasEntity('battery_soc');
+            const hasSolar = hasEntity('solar_watts');
+            const hasGrid = hasEntity('grid_watts');
+            const hasHome = hasEntity('load_watts');
+            const hasBatteryPower = hasEntity('battery_power');
+            const hasBatterySoc = hasEntity('battery_soc');
+            const hasDiverter = hasEntity('calculated_watts');
 
-            const solarActive = solarW > 0;
-            const gridActive = Math.abs(gridW) > 0;
-            const homeActive = loadW > 0;
-            const batteryActive = showBatteryNode && Math.abs(batteryW) > 0;
+            const effectiveLoadW = hasHome ? loadW : (solarW - gridW - batteryW);
+            const solarActive = hasSolar && Math.abs(solarW) > 0;
+            const gridActive = hasGrid && Math.abs(gridW) > 0;
+            const homeActive = Math.abs(effectiveLoadW) > 0;
+            const batteryActive = hasBatteryPower && Math.abs(batteryW) > 0;
+            const diverterActive = hasDiverter && Math.abs(diverterW) > 0;
 
-            const pSolar = (solarActive ? 'active ' : 'idle ') + 'solar flow-down';
-            const pGrid = (gridActive ? 'active ' : 'idle ') + 'grid ' + (gridW >= 0 ? 'flow-left' : 'flow-right');
-            const pHome = (homeActive ? 'active ' : 'idle ') + 'home flow-right';
-            const pBattery = (batteryActive ? 'active ' : 'idle ') + 'battery ' + (batteryW >= 0 ? 'flow-down' : 'flow-up');
-            const hasFlow = solarActive || gridActive || homeActive || (showBatteryNode && batteryActive);
-            const wrapClass = showBatteryNode ? 'ibep-flow-wrap has-battery' : 'ibep-flow-wrap no-battery';
+            const cSolarCenter = 'link-solar-center ' + (solarActive ? 'is-active flow-down' : 'is-idle');
+            const battCenterDir = batteryW < 0 ? 'flow-right' : 'flow-left';
+            const cBatteryCenter = 'link-battery-center ' + (batteryActive ? ('is-active ' + battCenterDir) : 'is-idle');
+            const gridCenterDir = gridW >= 0 ? 'flow-right' : 'flow-left';
+            const cGridCenter = 'link-grid-center ' + (gridActive ? ('is-active ' + gridCenterDir) : 'is-idle');
+            const cHomeCenter = 'link-home-center ' + (homeActive ? 'is-active flow-down' : 'is-idle');
+            const solarChargesBatt = solarActive && batteryActive && batteryW >= 0;
+            const cSolarBattery = 'link-solar-battery ' + (solarChargesBatt ? 'is-active flow-right' : 'is-idle');
+            const solarFeedsGrid = solarActive && gridActive && gridW >= 0;
+            const cSolarGrid = 'link-solar-grid ' + (solarFeedsGrid ? 'is-active flow-right' : 'is-idle');
+            const battFeedsHome = batteryActive && batteryW < 0 && homeActive;
+            const cBatteryHome = 'link-battery-home ' + (battFeedsHome ? 'is-active flow-right' : 'is-idle');
+            const gridFeedsHome = gridActive && gridW < 0 && homeActive;
+            const cGridHome = 'link-grid-home ' + (gridFeedsHome ? 'is-active flow-right' : 'is-idle');
 
-            return [
-              '<div class=\"', wrapClass, '\">',
-              '<div class=\"ibep-flow-pipe pipe-top ', pSolar, '\"></div>',
-              '<div class=\"ibep-flow-pipe pipe-left ', pGrid, '\"></div>',
-              '<div class=\"ibep-flow-pipe pipe-right ', pHome, '\"></div>',
-              (showBatteryNode ? ('<div class=\"ibep-flow-pipe pipe-bottom ' + pBattery + '\"></div>') : ''),
-              '<div class=\"ibep-flow-node node-solar ', (solarActive ? 'node-active' : 'node-idle'), '\">',
-                '<div class=\"node-title\">', t.solar, '</div>',
-                '<div class=\"node-main\">', fmtW(solarW), '</div>',
-                '<div class=\"node-sub\">', fmtK(solarK), '</div>',
-              '</div>',
-              '<div class=\"ibep-flow-node node-grid ', (gridActive ? 'node-active' : 'node-idle'), '\">',
-                '<div class=\"node-title\">', t.grid, '</div>',
-                '<div class=\"node-main\">', fmtW(gridW), '</div>',
-                '<div class=\"node-sub\"><span class=\"node-sub-line node-sub-gap-after\">', gridDir, '</span><span class=\"node-sub-line\">', t.imp, '. ', fmtK(importK), '</span><span class=\"node-sub-line\">', t.exp, '. ', fmtK(exportK), '</span></div>',
-              '</div>',
-              '<div class=\"ibep-flow-node node-home ', (homeActive ? 'node-active' : 'node-idle'), '\">',
-                '<div class=\"node-title\">', t.home, '</div>',
-                '<div class=\"node-main\">', fmtW(loadW), '</div>',
-                '<div class=\"node-sub\"><span class=\"node-sub-line\">', t.diverter, '</span><span class=\"node-sub-line node-sub-gap-after\">', pwmText, ' - ', fmtW(diverterW), '</span><span class=\"node-sub-line\">', t.diverterToday, '</span><span class=\"node-sub-line\">', fmtK(diverterK), '</span></div>',
-              '</div>',
-              (showBatteryNode
-                ? [
-                    '<div class=\"ibep-flow-node node-battery ', (batteryActive ? 'node-active' : 'node-idle'), '\">',
-                      '<div class=\"node-title\">', t.battery, '</div>',
-                      '<div class=\"node-main\">', fmtW(batteryW), '</div>',
-                      '<div class=\"node-sub\"><span class=\"node-sub-line node-sub-gap-after\">', battDir, '</span><span class=\"node-sub-line\">SoC ', Math.round(batterySoc), '%</span></div>',
-                    '</div>'
-                  ].join('')
-                : ''),
-              '<div class=\"ibep-flow-center ', (hasFlow ? 'live' : 'idle'), '\"></div>',
-              '</div>'
-            ].join('');
+            const solarMain = hasSolar ? fmtAbsW(solarW) : '-- W';
+            const gridMain = hasGrid ? fmtSignedW(gridW) : '-- W';
+            const homeMain = fmtAbsW(effectiveLoadW);
+            const batteryMain = hasBatteryPower ? fmtSignedW(batteryW) : '-- W';
+            const diverterMain = hasDiverter ? fmtAbsW(diverterW) : '-- W';
+            const inverterW = effectiveLoadW + gridW;
+            const inverterMain = (hasHome || hasGrid || hasDiverter || hasSolar || hasBatteryPower) ? fmtAbsW(inverterW) : '-- W';
+            const inverterActive = Math.abs(inverterW) > 0;
+            const batterySocText = hasBatterySoc ? (Math.round(batterySoc) + ' %') : '';
+            const batteryDirText = hasBatteryPower ? (batteryW >= 0 ? t.charging : t.discharging) : '';
+            const battSoc = hasBatterySoc ? Math.max(0, Math.min(100, Math.round(batterySoc))) : 50;
+            const battIcon = battSoc >= 90 ? 'mdi:battery' : battSoc >= 70 ? 'mdi:battery-high' : battSoc >= 50 ? 'mdi:battery-medium' : battSoc >= 20 ? 'mdi:battery-low' : 'mdi:battery-alert-variant-outline';
+            const battColor = battSoc >= 60 ? '#41aa56' : battSoc >= 30 ? '#d8a038' : '#d54343';
+            const gridDirText = hasGrid ? (gridW >= 0 ? t.exporting : t.importing) : '';
+
+            const solarSubText = fmtK(solarK);
+            const gridImpText = t.imp + '. ' + fmtK(importK);
+            const gridExpText = t.exp + '. ' + fmtK(exportK);
+            const diverterTodayText = t.diverterToday;
+            const diverterTodayKwh = fmtK(diverterK);
+
+            const hasSolarToday = hasEntity('kw_solar_today');
+            const hasImportToday = hasEntity('kw_import_today');
+            const hasExportToday = hasEntity('kw_export_today');
+            const hasDiverterToday = hasEntity('kw_diverter_today');
+            const hasPwm = hasEntity('pwm_value');
+            const hasAnyInverter = hasHome || hasGrid || hasDiverter || hasSolar || hasBatteryPower;
+
+            const solarEntityId = (getObj('solar_watts') || {}).entity_id || '';
+            const batteryEntityId = (getObj('battery_power') || {}).entity_id || '';
+            const gridEntityId = (getObj('grid_watts') || {}).entity_id || '';
+            const homeEntityId = (getObj('load_watts') || {}).entity_id || '';
+            const inverterEntityId = (getObj('calculated_watts') || {}).entity_id || '';
+
+            const hasBatt = hasBatteryPower || hasBatterySoc;
+            const layoutClass = (!hasBatt && hasGrid) ? ' layout-no-batt' : (hasBatt && !hasGrid) ? ' layout-no-grid' : '';
+
+            const parts = ['<div class="ibep-flow-wrap' + layoutClass + '">'];
+
+            if (hasSolar) parts.push('<div class="ibep-flow-connector ', cSolarCenter, '"></div>');
+            if (hasBatteryPower) parts.push('<div class="ibep-flow-connector ', cBatteryCenter, '"></div>');
+            if (hasGrid) parts.push('<div class="ibep-flow-connector ', cGridCenter, '"></div>');
+            parts.push('<div class="ibep-flow-connector ', cHomeCenter, '"></div>');
+            if (hasSolar && hasBatteryPower) parts.push('<div class="ibep-flow-connector ', cSolarBattery, '"></div>');
+            if (hasSolar && hasGrid) parts.push('<div class="ibep-flow-connector ', cSolarGrid, '"></div>');
+            if (hasBatteryPower) parts.push('<div class="ibep-flow-connector ', cBatteryHome, '"></div>');
+            if (hasGrid) parts.push('<div class="ibep-flow-connector ', cGridHome, '"></div>');
+
+            if (hasSolar) {
+              parts.push(
+                '<div class="ibep-flow-node node-solar ', (solarActive ? 'node-active' : 'node-idle'), '" data-entity="', solarEntityId, '">',
+                  '<ha-icon class="node-icon" icon="mdi:solar-power"></ha-icon>',
+                  '<div class="node-main">', solarMain, '</div>',
+                  (hasSolarToday ? ('<div class="node-sub">' + solarSubText + '</div>') : ''),
+                '</div>'
+              );
+            }
+
+            if (hasBatteryPower || hasBatterySoc) {
+              parts.push(
+                '<div class="ibep-flow-node node-battery ', (batteryActive ? 'node-active' : 'node-idle'), '" data-entity="', batteryEntityId, '">',
+                  '<ha-icon class="node-icon node-icon-rotated" icon="', battIcon, '" style="color:', battColor, ';"></ha-icon>',
+                  (hasBatteryPower ? ('<div class="node-main ' + (batteryW < 0 ? 'is-negative' : '') + '">' + batteryMain + '</div>') : ''),
+                  '<div class="node-sub">',
+                    (batteryDirText ? ('<span class="node-sub-line node-sub-title">' + batteryDirText + '</span>') : ''),
+                    (hasBatterySoc ? (batterySocText ? ('<span class="node-sub-line node-soc">SoC ' + batterySocText + '</span>') : '') : ''),
+                  '</div>',
+                '</div>'
+              );
+            }
+
+            if (hasGrid) {
+              parts.push(
+                '<div class="ibep-flow-node node-grid ', (gridActive ? 'node-active' : 'node-idle'), '" data-entity="', gridEntityId, '">',
+                  '<ha-icon class="node-icon" icon="mdi:transmission-tower"></ha-icon>',
+                  '<div class="node-main ', (gridW < 0 ? 'is-negative' : ''), '">', gridMain, '</div>',
+                  '<div class="node-sub">',
+                    '<span class="node-sub-line node-sub-title">', gridDirText || '--', '</span>',
+                    (hasImportToday ? ('<span class="node-sub-line">' + gridImpText + '</span>') : ''),
+                    (hasExportToday ? ('<span class="node-sub-line">' + gridExpText + '</span>') : ''),
+                  '</div>',
+                '</div>'
+              );
+            }
+
+            parts.push(
+              '<div class="ibep-flow-node node-home ', (homeActive ? 'node-active' : 'node-idle'), '" data-entity="', homeEntityId, '">',
+                '<ha-icon class="node-icon" icon="mdi:home-outline"></ha-icon>',
+                '<div class="node-main">', homeMain, '</div>',
+                '<div class="node-sub">'
+            );
+            if (hasDiverter) {
+              parts.push('<span class="node-sub-line node-sub-title">', t.diverter, '</span>');
+              if (hasPwm) parts.push('<span class="node-sub-line">', pwmText, ' - ', fmtAbsW(diverterW), '</span>');
+              else parts.push('<span class="node-sub-line">', fmtAbsW(diverterW), '</span>');
+            }
+            if (hasDiverterToday) {
+              parts.push('<span class="node-sub-line node-sub-spaced node-sub-title">', diverterTodayText, '</span>');
+              parts.push('<span class="node-sub-line">', diverterTodayKwh, '</span>');
+            }
+            parts.push('</div>', '</div>');
+
+            if (hasAnyInverter) {
+              parts.push(
+                '<div class="ibep-flow-node node-diverter ', (inverterActive ? 'node-active' : 'node-idle'), '" data-entity="', inverterEntityId, '">',
+                  '<ha-icon class="node-icon" icon="mdi:lightning-bolt"></ha-icon>',
+                  '<div class="node-sub node-sub-top">', t.inverter, '</div>',
+                  '<div class="node-main">', inverterMain, '</div>',
+                '</div>'
+              );
+            }
+
+            parts.push('</div>');
+
+            if (!window._ibepFlowClickHandler) {
+              window._ibepFlowClickHandler = true;
+              let _ibepTouchStart = null;
+              const IBEP_TAP_THRESHOLD = 10;
+              const ibepDispatch = (e, isTouchEnd) => {
+                const path = e.composedPath();
+                for (const el of path) {
+                  if (el.classList && (el.classList.contains('ibep-flow-node') || el.classList.contains('ibep-temp-pill')) && el.hasAttribute && el.hasAttribute('data-entity')) {
+                    const eid = el.getAttribute('data-entity');
+                    if (eid) {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      if (isTouchEnd) el._ibepTouchHandled = Date.now();
+                      const ev = new CustomEvent('hass-more-info', {
+                        detail: { entityId: eid },
+                        bubbles: true,
+                        composed: true
+                      });
+                      el.dispatchEvent(ev);
+                    }
+                    break;
+                  }
+                }
+              };
+              document.addEventListener('touchstart', (e) => {
+                if (e.touches && e.touches.length > 0) {
+                  _ibepTouchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                }
+              }, true);
+              document.addEventListener('touchend', (e) => {
+                if (_ibepTouchStart && e.changedTouches && e.changedTouches.length > 0) {
+                  const dx = e.changedTouches[0].clientX - _ibepTouchStart.x;
+                  const dy = e.changedTouches[0].clientY - _ibepTouchStart.y;
+                  if (Math.abs(dx) > IBEP_TAP_THRESHOLD || Math.abs(dy) > IBEP_TAP_THRESHOLD) {
+                    _ibepTouchStart = null;
+                    return;
+                  }
+                }
+                _ibepTouchStart = null;
+                ibepDispatch(e, true);
+              }, true);
+              document.addEventListener('click', (e) => {
+                const path = e.composedPath();
+                for (const el of path) {
+                  if (el.classList && (el.classList.contains('ibep-flow-node') || el.classList.contains('ibep-temp-pill')) && el._ibepTouchHandled && (Date.now() - el._ibepTouchHandled < 800)) return;
+                  if (el.classList && (el.classList.contains('ibep-flow-node') || el.classList.contains('ibep-temp-pill'))) { ibepDispatch(e, false); return; }
+                }
+              }, true);
+            }
+
+            return parts.join('');
           ]]]
       styles:
         card:
@@ -250,7 +394,7 @@ card:
             - padding-top: 2px
           flow:
             - justify-self: stretch
-      extra_styles: >
+      extra_styles: |
         .ibep-brand-logo-wrap {
           display: inline-flex;
           align-items: center;
@@ -261,7 +405,6 @@ card:
           # border: 1px solid rgba(0, 210, 255, 0.28);
           # box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
         }
-
         .ibep-brand-logo {
           display: block;
           width: min(46vw, 180px);
@@ -269,352 +412,287 @@ card:
           height: auto;
           object-fit: contain;
         }
-
         .ibep-flow-wrap {
           position: relative;
-          height: 356px;
-          margin-top: 2px;
-          border-radius: 18px;
+          width: min(100%, 460px);
+          aspect-ratio: 1 / 1;
+          height: auto;
+          min-height: 300px;
+          margin: 2px auto 0;
+          border-radius: 16px;
           overflow: hidden;
-          background:
-            radial-gradient(circle at 18% 14%, rgba(255, 185, 0, 0.28), transparent 38%),
-            radial-gradient(circle at 82% 78%, rgba(0, 210, 255, 0.22), transparent 42%),
-            radial-gradient(circle at 54% 88%, rgba(120, 220, 60, 0.18), transparent 48%),
-            linear-gradient(155deg, rgba(32, 106, 50, 0.94), rgba(46, 138, 66, 0.92));
-          border: 1px solid rgba(140, 230, 90, 0.85);
+          background: rgba(10, 18, 28, 0.35);
+          border: 1px solid rgba(255, 255, 255, 0.10);
+          --ox: 0%;
         }
-        .ibep-flow-wrap.no-battery {
-          height: 252px;
+        .layout-no-batt {
+          --ox: -16.5%;
         }
-        .ibep-flow-wrap.no-battery .ibep-flow-center {
-          top: 178px;
+        .layout-no-grid {
+          --ox: 16.5%;
         }
-        .ibep-flow-wrap.no-battery .pipe-left,
-        .ibep-flow-wrap.no-battery .pipe-right {
-          top: calc(178px - 1.5px);
-        }
-
-        .ibep-flow-wrap::before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          z-index: 0;
-          pointer-events: none;
-          background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0px, rgba(255, 255, 255, 0.018) 1px, transparent 1px, transparent 28px);
-        }
-
-
-        .ibep-flow-center {
-          position: absolute;
-          z-index: 4;
-          left: 50%;
-          top: 50%;
-          width: 14px;
-          height: 14px;
-          transform: translate(-50%, -50%);
-          border-radius: 50%;
-          background: #00D2FF;
-          box-shadow: 0 0 10px rgba(0, 210, 255, 0.72);
-        }
-
-        .ibep-flow-center.live {
-          animation: centerBeat 1.6s ease-in-out infinite;
-          box-shadow: 0 0 18px rgba(0, 210, 255, 0.95), 0 0 32px rgba(0, 180, 230, 0.48);
-        }
-
-        .ibep-flow-center.idle {
-          opacity: 0.55;
-        }
-
-
-        .ibep-flow-pipe {
+        .ibep-flow-connector {
           position: absolute;
           z-index: 1;
           border-radius: 999px;
-          opacity: 0.42;
-          background: rgba(210, 220, 230, 0.18);
-          box-shadow: inset 0 0 0 1px rgba(180, 200, 220, 0.22);
+          --link-color: rgba(120, 132, 152, 0.24);
+          background: var(--link-color);
+          transition: opacity 0.2s ease;
+          background-image: repeating-linear-gradient(90deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 7px, var(--link-color) 7px, var(--link-color) 14px, rgba(255,255,255,0.8) 14px, rgba(255,255,255,0.8) 17px, rgba(255,255,255,0) 17px, rgba(255,255,255,0) 24px);
         }
-
-        .ibep-flow-pipe.idle {
-          opacity: 0.24;
+        .ibep-flow-connector.is-idle {
+          opacity: 0.28;
         }
-
-        .ibep-flow-pipe.active {
-          opacity: 1;
-          box-shadow: 0 0 10px var(--flow-glow, rgba(121, 188, 28, 0.5));
+        .ibep-flow-connector.is-active {
+          opacity: 0.85;
         }
-
-        .ibep-flow-pipe.solar { --flow-color: #FFB800; --flow-glow: rgba(255,
-        184, 0, 0.72); }
-
-        .ibep-flow-pipe.grid { --flow-color: #00D2FF; --flow-glow: rgba(0, 210,
-        255, 0.72); }
-
-        .ibep-flow-pipe.home { --flow-color: #78DC14; --flow-glow: rgba(120,
-        220, 20, 0.68); }
-
-        .ibep-flow-pipe.battery { --flow-color: #60CFFF; --flow-glow: rgba(96,
-        207, 255, 0.70); }
-
-
-        .pipe-top {
-          left: calc(50% - 1.5px);
-          top: 138px;
-          width: 3px;
-          height: 40px;
+        .ibep-flow-connector.flow-right.is-active {
+          animation: flowRight 1.05s linear infinite, pipeGlow 1.9s ease-in-out infinite;
         }
-
-        .pipe-left {
-          left: 140px;
-          top: calc(50% - 1.5px);
-          width: calc(50% - 140px);
-          height: 3px;
+        .ibep-flow-connector.flow-left.is-active {
+          animation: flowLeft 1.05s linear infinite, pipeGlow 1.9s ease-in-out infinite;
         }
-
-        .pipe-right {
-          left: 50%;
-          top: calc(50% - 1.5px);
-          width: calc(50% - 140px);
-          height: 3px;
+        .ibep-flow-connector.flow-down.is-active {
+          background-image: repeating-linear-gradient(180deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 7px, var(--link-color) 7px, var(--link-color) 14px, rgba(255,255,255,0.8) 14px, rgba(255,255,255,0.8) 17px, rgba(255,255,255,0) 17px, rgba(255,255,255,0) 24px);
+          animation: flowDown 1.05s linear infinite, pipeGlow 1.9s ease-in-out infinite;
         }
-
-        .pipe-bottom {
-          left: calc(50% - 1.5px);
+        .ibep-flow-connector.flow-up.is-active {
+          background-image: repeating-linear-gradient(180deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 7px, var(--link-color) 7px, var(--link-color) 14px, rgba(255,255,255,0.8) 14px, rgba(255,255,255,0.8) 17px, rgba(255,255,255,0) 17px, rgba(255,255,255,0) 24px);
+          animation: flowUp 1.05s linear infinite, pipeGlow 1.9s ease-in-out infinite;
+        }
+        .link-solar-center {
+          --link-color: rgba(255, 196, 61, 0.45);
+          left: calc(50% - 1px + var(--ox, 0%));
+          top: 17%;
+          width: 2px;
+          height: 33%;
+        }
+        .link-battery-center {
+          --link-color: rgba(86, 201, 120, 0.45);
+          left: calc(17% + var(--ox, 0%));
+          top: calc(50% - 1px);
+          width: 33%;
+          height: 2px;
+        }
+        .link-grid-center {
+          --link-color: rgba(156, 118, 255, 0.45);
+          left: calc(50% + var(--ox, 0%));
+          top: calc(50% - 1px);
+          width: 33%;
+          height: 2px;
+        }
+        .link-home-center {
+          --link-color: rgba(66, 153, 255, 0.45);
+          left: calc(50% - 1px + var(--ox, 0%));
           top: 50%;
-          width: 3px;
-          height: 36px;
+          width: 2px;
+          height: 33%;
         }
-
-
-        .ibep-flow-pipe.active.flow-right {
-          background-image: repeating-linear-gradient(90deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 8px, var(--flow-color) 8px, var(--flow-color) 17px, rgba(255,255,255,0.9) 17px, rgba(255,255,255,0.9) 20px, rgba(255,255,255,0) 20px, rgba(255,255,255,0) 28px);
-          animation: flowRight 1s linear infinite, pipeGlow 2s ease-in-out infinite;
+        .link-solar-battery {
+          --link-color: rgba(255, 196, 61, 0.45);
+          left: calc(50% + var(--ox, 0%));
+          top: calc(17% - 1px);
+          width: 47%;
+          height: 2px;
+          transform-origin: left center;
+          transform: rotate(135deg);
         }
-
-        .ibep-flow-pipe.active.flow-left {
-          background-image: repeating-linear-gradient(90deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 8px, var(--flow-color) 8px, var(--flow-color) 17px, rgba(255,255,255,0.9) 17px, rgba(255,255,255,0.9) 20px, rgba(255,255,255,0) 20px, rgba(255,255,255,0) 28px);
-          animation: flowLeft 1s linear infinite, pipeGlow 2s ease-in-out infinite;
+        .link-solar-grid {
+          --link-color: rgba(255, 196, 61, 0.45);
+          left: calc(50% + var(--ox, 0%));
+          top: calc(17% - 1px);
+          width: 47%;
+          height: 2px;
+          transform-origin: left center;
+          transform: rotate(45deg);
         }
-
-        .ibep-flow-pipe.active.flow-down {
-          background-image: repeating-linear-gradient(180deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 8px, var(--flow-color) 8px, var(--flow-color) 17px, rgba(255,255,255,0.9) 17px, rgba(255,255,255,0.9) 20px, rgba(255,255,255,0) 20px, rgba(255,255,255,0) 28px);
-          animation: flowDown 1.1s linear infinite, pipeGlow 2s ease-in-out infinite;
+        .link-battery-home {
+          --link-color: rgba(86, 201, 120, 0.45);
+          left: calc(17% + var(--ox, 0%));
+          top: calc(50% - 1px);
+          width: 47%;
+          height: 2px;
+          transform-origin: left center;
+          transform: rotate(45deg);
         }
-
-        .ibep-flow-pipe.active.flow-up {
-          background-image: repeating-linear-gradient(180deg, rgba(255,255,255,0) 0px, rgba(255,255,255,0) 8px, var(--flow-color) 8px, var(--flow-color) 17px, rgba(255,255,255,0.9) 17px, rgba(255,255,255,0.9) 20px, rgba(255,255,255,0) 20px, rgba(255,255,255,0) 28px);
-          animation: flowUp 1.1s linear infinite, pipeGlow 2s ease-in-out infinite;
+        .link-grid-home {
+          --link-color: rgba(156, 118, 255, 0.45);
+          left: calc(83% + var(--ox, 0%));
+          top: calc(50% - 1px);
+          width: 47%;
+          height: 2px;
+          transform-origin: left center;
+          transform: rotate(135deg);
         }
-
-
         .ibep-flow-node {
           position: absolute;
           z-index: 3;
-          width: 132px;
-          height: 132px;
-          border-radius: 999px;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
+          width: min(130px, 28%);
+          height: min(130px, 28%);
+          transform: translate(-50%, -50%);
+          border-radius: 50%;
+          display: grid;
+          grid-template-rows: 24px minmax(0, auto) minmax(0, auto);
+          align-content: center;
+          justify-items: center;
           align-items: center;
           text-align: center;
-          padding: 8px 9px;
+          padding: 8px 9px 10px;
           box-sizing: border-box;
-          border: 1.5px solid var(--node-accent, #78DC14);
-          background: radial-gradient(circle at 34% 28%, rgba(22, 38, 56, 0.94), rgba(14, 26, 42, 0.96));
-          box-shadow: inset 0 0 22px rgba(255, 255, 255, 0.04), 0 4px 18px rgba(0,0,0,0.56);
-          transition: transform 0.25s ease, box-shadow 0.25s ease, opacity 0.25s ease;
+          border: 2px solid var(--node-accent, #9aa5b8);
+          background: rgba(255, 255, 255, 0.88);
+          backdrop-filter: blur(4px);
+          -webkit-backdrop-filter: blur(4px);
+          box-shadow: 0 2px 9px rgba(0, 0, 0, 0.25);
+          cursor: pointer;
         }
-
         .ibep-flow-node.node-active {
           opacity: 1;
-          animation: nodeBreathe 2.6s ease-in-out infinite;
-          box-shadow: inset 0 0 24px rgba(255, 255, 255, 0.05), 0 0 20px var(--node-glow, rgba(120, 220, 20, 0.52));
+          animation: nodeFlash 1.8s ease-in-out 1;
         }
-
         .ibep-flow-node.node-idle {
-          opacity: 0.82;
+          opacity: 0.92;
         }
-
         .node-solar {
-          top: 6px;
-          left: calc(50% - 66px);
-          --node-accent: #FFB800;
-          --node-glow: rgba(255, 184, 0, 0.62);
-          # background: radial-gradient(circle at 34% 28%, rgba(70, 50, 10, 0.94), rgba(50, 35, 5, 0.96));
-          background: radial-gradient(circle at 34% 28%, rgba(235, 202, 40, 0.94), rgba(50, 35, 5, 0.96));
+          top: 17%;
+          left: calc(50% + var(--ox, 0%));
+          --node-accent: #d8b548;
+          --node-main: #8a6d00;
         }
-
-        .node-grid {
-          top: 112px;
-          left: 8px;
-          --node-accent: #00D2FF;
-          --node-glow: rgba(0, 210, 255, 0.60);
-          background: radial-gradient(circle at 34% 28%, rgba(10, 40, 70, 0.94), rgba(5, 25, 50, 0.96));
-        }
-
-        .node-home {
-          top: 112px;
-          right: 8px;
-          --node-accent: #78DC14;
-          --node-glow: rgba(120, 220, 20, 0.58);
-          background: radial-gradient(circle at 34% 28%, rgba(30, 60, 10, 0.94), rgba(20, 40, 5, 0.96));
-        }
-
         .node-battery {
-          bottom: 6px;
-          left: calc(50% - 66px);
-          --node-accent: #60CFFF;
-          --node-glow: rgba(96, 207, 255, 0.60);
-          background: radial-gradient(circle at 34% 28%, rgba(10, 60, 60, 0.94), rgba(5, 40, 40, 0.96));
+          top: 50%;
+          left: calc(17% + var(--ox, 0%));
+          --node-accent: #41aa56;
+          --node-main: #1e7a34;
         }
-
-
-        .node-title {
-          color: #8ee8ff;
-          width: 100%;
-          max-width: 100%;
-          font-size: 1.02rem;
-          font-weight: 600;
-          line-height: 1.1;
-          letter-spacing: 0.03em;
-          text-transform: uppercase;
-          text-shadow: 0 1px 3px rgba(0,0,0,0.7);
-          margin-bottom: 3px;
+        .node-grid {
+          top: 50%;
+          left: calc(83% + var(--ox, 0%));
+          --node-accent: #8660ce;
+          --node-main: #5a3d9e;
         }
-
+        .node-home {
+          top: 83%;
+          left: calc(50% + var(--ox, 0%));
+          --node-accent: #2f6fe8;
+          --node-main: #1a56b0;
+        }
+        .node-diverter {
+          z-index: 4;
+          top: 50%;
+          left: calc(50% + var(--ox, 0%));
+          width: min(122px, 26%);
+          height: min(122px, 26%);
+          --node-accent: #7a8ea0;
+          --node-main: #4a5568;
+        }
+        .node-diverter.node-active {
+          animation: nodeFlash 1.8s ease-in-out 1;
+        }
+        .node-icon {
+          color: var(--node-accent, #7e8aa0);
+          --mdc-icon-size: 26px;
+          margin: 0;
+          align-self: center;
+          justify-self: center;
+        }
+        .node-icon-rotated {
+          transform: rotate(90deg);
+        }
         .node-main {
-          color: #ffffff;
+          color: var(--node-main, #2c3447);
           width: 100%;
           max-width: 100%;
-          font-size: 1.36rem;
+          font-size: clamp(1.18rem, 3.5vw, 1.44rem);
           font-weight: 700;
-          line-height: 1.1;
-          letter-spacing: 0.01em;
-          text-shadow: 0 1px 4px rgba(0,0,0,0.65);
+          line-height: 1.02;
+          margin-top: 3px;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
-
+        .node-main.is-negative {
+          color: #c0392b;
+        }
+        .node-diverter .node-main {
+          font-size: clamp(1.22rem, 3.7vw, 1.5rem);
+        }
+        .node-sub-top {
+          margin-top: 0;
+          margin-bottom: 1px;
+          font-size: clamp(0.7rem, 2.2vw, 0.85rem) !important;
+          font-weight: 700;
+        }
         .node-sub {
-          color: #60CFFF;
+          margin-top: 2px;
+          font-size: clamp(0.56rem, 1.7vw, 0.66rem);
+          font-weight: 600;
+          line-height: 1.07;
+          color: rgba(0, 0, 0, 0.6);
           width: 100%;
           max-width: 100%;
-          font-size: 0.80rem;
-          font-weight: 500;
-          line-height: 1.18;
-          letter-spacing: 0.01em;
-          text-shadow: 0 1px 2px rgba(0,0,0,0.6);
-          margin-top: 3px;
-          white-space: normal;
-          overflow-wrap: anywhere;
-          word-break: break-word;
         }
-
+        .node-sub-line:first-child {
+          margin-bottom: 3px;
+        }
         .node-sub-line {
           display: block;
+          width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
-
-        .node-sub-gap-after {
-          margin-bottom: 4px;
+        .node-sub-title {
+          font-weight: 700;
+          color: var(--node-accent, #7e8aa0);
         }
-
-
+        .node-sub-spaced {
+          margin-top: 3px;
+        }
+        .node-soc {
+          color: #1e7a34;
+        }
         @keyframes flowRight {
           0% { background-position: 0 0; }
-          100% { background-position: 28px 0; }
+          100% { background-position: 24px 0; }
         }
-
         @keyframes flowLeft {
           0% { background-position: 0 0; }
-          100% { background-position: -28px 0; }
+          100% { background-position: -24px 0; }
         }
-
         @keyframes flowDown {
           0% { background-position: 0 0; }
-          100% { background-position: 0 28px; }
+          100% { background-position: 0 24px; }
         }
-
         @keyframes flowUp {
           0% { background-position: 0 0; }
-          100% { background-position: 0 -28px; }
+          100% { background-position: 0 -24px; }
         }
-
         @keyframes pipeGlow {
           0%, 100% { filter: brightness(1); }
-          50% { filter: brightness(1.22); }
+          50% { filter: brightness(1.2); }
         }
-
-        @keyframes centerBeat {
-          0%, 100% { transform: translate(-50%, -50%) scale(1); }
-          50% { transform: translate(-50%, -50%) scale(1.16); }
+        @keyframes nodeFlash {
+          0%, 100% { box-shadow: 0 2px 9px rgba(0, 0, 0, 0.25); }
+          50% { box-shadow: 0 2px 9px rgba(0, 0, 0, 0.25), 0 0 16px var(--node-accent, rgba(120, 132, 152, 0.45)); }
         }
-
-        @keyframes nodeBreathe {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-2px); }
-        }
-
-
         @media (max-width: 540px) {
           .ibep-flow-wrap {
-            height: 330px;
-          }
-          .ibep-flow-wrap.no-battery {
-            height: 230px;
-          }
-          .ibep-flow-wrap.no-battery .ibep-flow-center {
-            top: 164px;
-          }
-          .ibep-flow-wrap.no-battery .pipe-left,
-          .ibep-flow-wrap.no-battery .pipe-right {
-            top: calc(164px - 1.5px);
+            width: 100%;
+            min-height: 286px;
           }
           .ibep-flow-node {
-            width: 116px;
-            height: 116px;
-            padding: 6px 8px;
+            width: min(112px, 29%);
+            height: min(112px, 29%);
+            grid-template-rows: 21px minmax(0, auto) minmax(0, auto);
+            padding: 6px 8px 8px;
           }
-          .node-solar {
-            top: 8px;
-            left: calc(50% - 58px);
+          .node-diverter {
+            width: min(106px, 27%);
+            height: min(106px, 27%);
           }
-          .node-grid {
-            top: 106px;
-            left: 2px;
-          }
-          .node-home {
-            top: 106px;
-            right: 2px;
-          }
-          .node-battery {
-            bottom: 8px;
-            left: calc(50% - 58px);
-          }
-          .pipe-top {
-            top: 124px;
-            height: 41px;
-          }
-          .pipe-left {
-            left: 118px;
-            width: calc(50% - 118px);
-          }
-          .pipe-right {
-            width: calc(50% - 118px);
-          }
-          .pipe-bottom {
-            height: 41px;
-          }
-          .node-title {
-            font-size: 0.96rem;
-          }
-          .node-main {
-            font-size: 1.18rem;
-          }
-          .node-sub {
-            font-size: 0.76rem;
+          .node-icon {
+            --mdc-icon-size: 22px;
           }
         }
     - type: custom:button-card
@@ -791,10 +869,16 @@ card:
           white-space: nowrap;
         }
     - type: custom:button-card
-      entity: ${'sensor.' + vars[0] + '_ibepower_temperature'}
+      entity: ${'sensor.' + vars[0] + '_inverter_temperature'}
       show_icon: false
       show_name: false
       show_state: false
+      tap_action:
+        action: none
+      hold_action:
+        action: none
+      double_tap_action:
+        action: none
       variables:
         base: ${vars[0]}
       triggers_update:
@@ -804,63 +888,73 @@ card:
         - ${'sensor.chip_temperature_' + vars[0]}
         - ${'sensor.' + vars[0] + '_thermo_temperature'}
         - ${'sensor.thermo_temperature_' + vars[0]}
+        - ${'sensor.' + vars[0] + '_thermo_sensor_name'}
+        - ${'sensor.thermo_sensor_name_' + vars[0]}
         - ${'sensor.' + vars[0] + '_ibepower_temperature'}
         - ${'sensor.ibepower_temperature_' + vars[0]}
         - ${'sensor.' + vars[0] + '_custom_temperature'}
         - ${'sensor.custom_temperature_' + vars[0]}
-        - ${'sensor.' + vars[0] + '_thermo_sensor_name'}
-        - ${'sensor.thermo_sensor_name_' + vars[0]}
         - ${'sensor.' + vars[0] + '_custom_sensor_name'}
         - ${'sensor.custom_sensor_name_' + vars[0]}
       custom_fields:
         temps: |
-          [[[ 
+          [[[
             const base = variables.base;
             const safeStates = (states && typeof states === 'object') ? states : {};
-            const getObj = (field) => safeStates['sensor.' + base + '_' + field] || safeStates['sensor.' + field + '_' + base];
-            const toNum = (value) => {
-              const n = Number(String(value ?? '').replace(',', '.'));
-              return Number.isFinite(n) ? n : null;
+            const invalidState = (state) => {
+              const s = String(state ?? '').trim().toLowerCase();
+              return !s || s === 'unknown' || s === 'unavailable' || s === 'none' || s === 'null';
             };
-            const rawLang = String(
-              hass?.language ||
-              hass?.selectedLanguage ||
-              hass?.locale?.language ||
-              ((typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en') ||
-              'en'
-            ).toLowerCase();
+            const getObj = (field) => {
+              const a = safeStates['sensor.' + base + '_' + field];
+              const b = safeStates['sensor.' + field + '_' + base];
+              const obj = a || b;
+              if (!obj || invalidState(obj.state)) return null;
+              return obj;
+            };
+            const fmtTemp = (obj) => {
+              if (!obj) return '-- °C';
+              const v = Number(String(obj.state ?? '').replace(',', '.'));
+              return Number.isFinite(v) ? v.toFixed(1) + '°C' : '-- °C';
+            };
+            const rawLang = String(hass?.language || hass?.selectedLanguage || hass?.locale?.language || 'en').toLowerCase();
             const lang = rawLang.startsWith('es') ? 'es' : (rawLang.startsWith('pt') ? 'pt' : 'en');
-            const i18n = {
-              es: { none: 'No hay temperaturas activas', inverter: 'Inversor', chip: 'Chip', thermo: 'Termo', board: 'Ibepower', custom: 'Custom' },
-              en: { none: 'No active temperatures', inverter: 'Inverter', chip: 'Chip', thermo: 'Thermo', board: 'Ibepower', custom: 'Custom' },
-              pt: { none: 'Sem temperaturas ativas', inverter: 'Inversor', chip: 'Chip', thermo: 'Termo', board: 'Ibepower', custom: 'Custom' }
+            const i18nTemp = {
+              es: { inverter: 'Inversor', thermo: 'Termo', custom: 'Personalizado' },
+              en: { inverter: 'Inverter', thermo: 'Thermo', custom: 'Custom' },
+              pt: { inverter: 'Inversor', thermo: 'Termo', custom: 'Personalizado' }
             };
-            const t = i18n[lang] || i18n.en;
-            const cleanName = (v) => {
-              const s = String(v ?? '').trim();
-              if (!s || ['unknown','unavailable','none','null'].includes(s.toLowerCase())) return '';
-              return s;
-            };
-            const thermoName = cleanName(getObj('thermo_sensor_name')?.state);
-            const customName = cleanName(getObj('custom_sensor_name')?.state);
+            const tt = i18nTemp[lang] || i18nTemp.en;
+            const inverterLabel = tt.inverter;
+            const thermoDefault = tt.thermo;
+            const thermoNameObj = safeStates['sensor.' + base + '_thermo_sensor_name'] || safeStates['sensor.thermo_sensor_name_' + base];
+            const thermoNameRaw = String(thermoNameObj?.state ?? '').trim();
+            const thermoLabel = (thermoNameRaw && !['unknown','unavailable','none','null'].includes(thermoNameRaw.toLowerCase())) ? thermoNameRaw : thermoDefault;
+            const customNameObj = safeStates['sensor.' + base + '_custom_sensor_name'] || safeStates['sensor.custom_sensor_name_' + base];
+            const customNameRaw = String(customNameObj?.state ?? '').trim();
+            const customLabel = (customNameRaw && !['unknown','unavailable','none','null'].includes(customNameRaw.toLowerCase())) ? customNameRaw : tt.custom;
             const defs = [
-              { field: 'inverter_temperature', label: t.inverter, color: '#FFCD0F' },
-              { field: 'chip_temperature', label: t.chip, color: '#A1D21C' },
-              { field: 'thermo_temperature', label: thermoName || t.thermo, color: '#A1D21C' },
-              { field: 'ibepower_temperature', label: t.board, color: '#79BC1C' },
-              { field: 'custom_temperature', label: customName || t.custom, color: '#A1D21C' }
+              { key: 'inverter_temperature', label: inverterLabel },
+              { key: 'chip_temperature', label: 'Chip' },
+              { key: 'thermo_temperature', label: thermoLabel },
+              { key: 'ibepower_temperature', label: 'Ibepower' },
+              { key: 'custom_temperature', label: customLabel }
             ];
-            const items = defs.map((def) => {
-              const obj = getObj(def.field);
-              if (!obj) return null;
-              const value = toNum(obj.state);
-              if (value === null) return null;
-              return '<div class="ibep-temp-pill"><span class="ibep-temp-label">' + def.label + '</span><span class="ibep-temp-value">' + value.toFixed(1) + '°C</span></div>';
-            }).filter(Boolean);
-            if (!items.length) {
-              return '<div class="ibep-temp-empty">' + t.none + '</div>';
+            const pills = [];
+            for (const d of defs) {
+              const obj = getObj(d.key);
+              if (!obj) continue;
+              const eid = obj.entity_id || '';
+              const handler = "event.stopPropagation();this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'" + eid + "'},bubbles:true,composed:true}));";
+              pills.push(
+                '<div class="ibep-temp-pill" data-entity="' + eid + '" onclick="' + handler + '">',
+                  '<span class="ibep-temp-title">' + d.label + '</span>',
+                  '<span class="ibep-temp-val">' + fmtTemp(obj) + '</span>',
+                '</div>'
+              );
             }
-            return '<div class="ibep-temps-wrap">' + items.join('') + '</div>';
+            if (!pills.length) return '';
+            return '<div class="ibep-temp-wrap">' + pills.join('') + '</div>';
           ]]]
       styles:
         card:
@@ -871,6 +965,20 @@ card:
               linear-gradient(145deg, rgba(40, 130, 60, 0.88), rgba(55, 160, 75,
               0.84))
           - border: 1px solid rgba(120, 220, 80, 0.90)
+          - display: |
+              [[[
+                const base = variables.base;
+                const safeStates = (states && typeof states === 'object') ? states : {};
+                const invalidState = (state) => {
+                  const s = String(state ?? '').trim().toLowerCase();
+                  return !s || s === 'unknown' || s === 'unavailable' || s === 'none' || s === 'null';
+                };
+                const hasTemp = (field) => {
+                  const obj = safeStates['sensor.' + base + '_' + field] || safeStates['sensor.' + field + '_' + base];
+                  return !!obj && !invalidState(obj.state);
+                };
+                return (hasTemp('inverter_temperature') || hasTemp('chip_temperature') || hasTemp('thermo_temperature') || hasTemp('ibepower_temperature') || hasTemp('custom_temperature')) ? 'block' : 'none';
+              ]]]
         grid:
           - grid-template-areas: "\"temps\""
           - grid-template-columns: 1fr
@@ -880,7 +988,7 @@ card:
             - justify-self: stretch
             - width: 100%
       extra_styles: |
-        .ibep-temps-wrap {
+        .ibep-temp-wrap {
           display: flex;
           flex-wrap: nowrap;
           align-items: stretch;
@@ -893,46 +1001,37 @@ card:
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 2px;
+          gap: 4px;
           flex: 1 1 0;
           min-width: 0;
-          padding: 6px 8px;
+          padding: 6px 4px;
           border-radius: 10px;
           background: linear-gradient(145deg, rgba(35, 115, 55, 0.92), rgba(55, 150, 75, 0.88));
           border: 1px solid rgba(140, 230, 90, 0.85);
+          cursor: pointer;
+          pointer-events: auto !important;
+          -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
         }
-        .ibep-temp-dot {
-          width: 7px;
-          height: 7px;
-          border-radius: 999px;
-          flex: 0 0 auto;
-          box-shadow: 0 0 6px rgba(255,255,255,0.35);
-        }
-        .ibep-temp-label {
+        .ibep-temp-title {
           color: #60CFFF;
           font-size: 0.68rem;
           font-weight: 600;
           letter-spacing: 0.02em;
           text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+          text-align: center;
+          width: 100%;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
-          width: 100%;
-          text-align: center;
         }
-        .ibep-temp-value {
+        .ibep-temp-val {
           color: #f0fff4;
           font-size: 0.78rem;
           font-weight: 700;
           text-shadow: 0 1px 3px rgba(0,0,0,0.35);
-          width: 100%;
           text-align: center;
-        }
-        .ibep-temp-empty {
-          color: #d8f8e7;
-          font-size: 0.72rem;
-          padding: 4px 2px;
-          text-align: center;
+          white-space: nowrap;
         }
     - type: vertical-stack
       cards:
@@ -1002,19 +1101,19 @@ card:
                       [[[
                         return entity?.state === 'on'
                           ? 'linear-gradient(145deg, rgba(52, 138, 24, 0.92), rgba(36, 108, 16, 0.90))'
-                          : 'linear-gradient(145deg, rgba(16, 50, 24, 0.90), rgba(12, 38, 18, 0.88))';
+                          : 'linear-gradient(145deg, rgba(138, 24, 24, 0.92), rgba(108, 16, 16, 0.90))';
                       ]]]
                   - border: |
                       [[[
                         return entity?.state === 'on'
                           ? '1px solid rgba(120, 220, 20, 0.86)'
-                          : '1px solid rgba(0, 210, 255, 0.46)';
+                          : '1px solid rgba(220, 60, 60, 0.86)';
                       ]]]
                   - box-shadow: |
                       [[[
                         return entity?.state === 'on'
                           ? '0 0 14px rgba(120, 220, 20, 0.34), inset 0 0 20px rgba(120,220,20,0.18)'
-                          : 'none';
+                          : '0 0 14px rgba(220, 60, 60, 0.34), inset 0 0 20px rgba(220,60,60,0.18)';
                       ]]]
                 name:
                   - color: "#60CFFF"
@@ -1073,18 +1172,33 @@ card:
                     states['switch.' + base + '_switch_on_off'] ||
                     states['switch.switch_on_off_' + base];
                   const managerOn = managerObj?.state === 'on';
-                  const rawMode = String(entity?.state ?? '').toUpperCase();
+                  const rawMode = String(entity?.state ?? '').trim().toUpperCase();
+                  const entityValid = rawMode && rawMode !== 'UNKNOWN' && rawMode !== 'UNAVAILABLE' && rawMode !== 'NONE' && rawMode !== 'NULL' && rawMode !== '';
                   const modeFromEntity = rawMode.startsWith('MAN') ? 'MANUAL' : 'AUTO';
                   const modeKey = 'ibepower_ui_mode_' + base;
-                  let uiMode = modeFromEntity;
+                  const mgrPrevKey = 'ibepower_mgr_prev_' + base;
+                  const mgrToggleKey = 'ibepower_mgr_toggle_ts_' + base;
+                  let uiMode;
                   try {
-                    if (managerOn) {
-                      localStorage.setItem(modeKey, modeFromEntity);
-                    } else {
-                      const saved = localStorage.getItem(modeKey);
-                      if (saved === 'MANUAL' || saved === 'AUTO') uiMode = saved;
+                    const curMgr = managerOn ? 'on' : 'off';
+                    const prevMgr = localStorage.getItem(mgrPrevKey);
+                    if (prevMgr !== null && prevMgr !== curMgr) {
+                      localStorage.setItem(mgrToggleKey, String(Date.now()));
                     }
-                  } catch (e) {}
+                    localStorage.setItem(mgrPrevKey, curMgr);
+                    const toggleTs = Number(localStorage.getItem(mgrToggleKey)) || 0;
+                    const inGrace = toggleTs > 0 && (Date.now() - toggleTs) < 15000;
+                    const saved = localStorage.getItem(modeKey);
+                    const savedValid = saved === 'MANUAL' || saved === 'AUTO';
+                    if (managerOn && entityValid && !inGrace) {
+                      localStorage.setItem(modeKey, modeFromEntity);
+                      uiMode = modeFromEntity;
+                    } else if (savedValid) {
+                      uiMode = saved;
+                    } else {
+                      uiMode = entityValid ? modeFromEntity : 'AUTO';
+                    }
+                  } catch (e) { uiMode = entityValid ? modeFromEntity : 'AUTO'; }
                   const rawLang = String(
                     hass?.language ||
                     hass?.selectedLanguage ||
@@ -1118,7 +1232,14 @@ card:
                   option: |
                     [[[
                       const raw = String(entity?.state ?? '').toUpperCase();
-                      return raw.startsWith('MAN') ? 'AUTO' : 'MANUAL';
+                      const opts = entity?.attributes?.options || [];
+                      const target = raw.startsWith('MAN') ? 'AUTO' : 'MANUAL';
+                      try {
+                        localStorage.setItem('ibepower_ui_mode_' + variables.base, target);
+                        localStorage.setItem('ibepower_mgr_toggle_ts_' + variables.base, '0');
+                      } catch(e) {}
+                      const match = opts.find(o => o.toUpperCase() === target);
+                      return match || target;
                     ]]]
               styles:
                 card:
@@ -1134,7 +1255,9 @@ card:
                           states['switch.' + base + '_switch_on_off'] ||
                           states['switch.switch_on_off_' + base];
                         const managerOn = managerObj?.state === 'on';
-                        const manual = String(entity?.state ?? '').toUpperCase().startsWith('MAN');
+                        let manual;
+                        try { manual = localStorage.getItem('ibepower_ui_mode_' + base) === 'MANUAL'; }
+                        catch(e) { manual = String(entity?.state ?? '').toUpperCase().startsWith('MAN'); }
                         if (!managerOn) {
                           return 'linear-gradient(145deg, rgba(28, 24, 12, 0.72), rgba(20, 18, 8, 0.70))';
                         }
@@ -1154,7 +1277,9 @@ card:
                         if (!managerOn) {
                           return '1px solid rgba(200, 170, 60, 0.30)';
                         }
-                        const manual = String(entity?.state ?? '').toUpperCase().startsWith('MAN');
+                        let manual;
+                        try { manual = localStorage.getItem('ibepower_ui_mode_' + base) === 'MANUAL'; }
+                        catch(e) { manual = String(entity?.state ?? '').toUpperCase().startsWith('MAN'); }
                         return manual
                           ? '1px solid rgba(255, 195, 0, 0.92)'
                           : '1px solid rgba(220, 165, 0, 0.68)';
@@ -1169,7 +1294,9 @@ card:
                           states['switch.switch_on_off_' + base];
                         const managerOn = managerObj?.state === 'on';
                         if (!managerOn) return 'none';
-                        const manual = String(entity?.state ?? '').toUpperCase().startsWith('MAN');
+                        let manual;
+                        try { manual = localStorage.getItem('ibepower_ui_mode_' + base) === 'MANUAL'; }
+                        catch(e) { manual = String(entity?.state ?? '').toUpperCase().startsWith('MAN'); }
                         return manual
                           ? '0 0 16px rgba(255, 185, 0, 0.42), inset 0 0 18px rgba(255,185,0,0.20)'
                           : '0 0 8px rgba(200, 155, 0, 0.22), inset 0 0 12px rgba(200,155,0,0.10)';
@@ -1277,7 +1404,7 @@ card:
                     '</div>'
                   ].join('');
                 } catch (e) {
-                  return '<div class="ibep-slider-fallback">Slider error</div>';
+                  return '<div class="ibep-slider-fallback">Error</div>';
                 }
               ]]]
           styles:
@@ -1375,8 +1502,8 @@ card:
                 - pointer-events: auto
           extra_styles: |
             .ibep-slider-wrap {
-              --ibep-fill: #78DC14;
-              --ibep-track: rgba(120, 220, 20, 0.28);
+              --ibep-fill: rgba(52, 138, 24, 0.92);
+              --ibep-track: rgba(52, 138, 24, 0.28);
               position: relative;
               width: 100%;
               height: 30px;
@@ -1386,8 +1513,8 @@ card:
               pointer-events: auto;
             }
             .ibep-slider-wrap.is-disabled {
-              --ibep-fill: rgba(120, 220, 20, 0.55);
-              --ibep-track: rgba(120, 220, 20, 0.15);
+              --ibep-fill: rgba(52, 138, 24, 0.55);
+              --ibep-track: rgba(52, 138, 24, 0.15);
             }
             .ibep-slider-input {
               -webkit-appearance: none;
@@ -1399,7 +1526,7 @@ card:
               outline: none;
               background: transparent;
               cursor: pointer;
-              accent-color: #78DC14;
+              accent-color: rgba(52, 138, 24, 1);
               pointer-events: auto;
               touch-action: pan-y;
             }
