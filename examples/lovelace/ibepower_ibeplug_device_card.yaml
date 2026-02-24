@@ -1,0 +1,460 @@
+type: custom:config-template-card
+variables:
+  - "'socket_taller'"
+  - "'/ibepower_static/ibepower_logo.png'"
+entities:
+  - ${'switch.' + vars[0] + '_ibeplug'}
+  - ${'switch.ibeplug_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_power'}
+  - ${'sensor.power_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_voltage'}
+  - ${'sensor.voltage_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_current'}
+  - ${'sensor.current_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_factor'}
+  - ${'sensor.factor_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_consumption'}
+  - ${'sensor.consumption_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_kw_yesterday'}
+  - ${'sensor.kw_yesterday_' + vars[0]}
+  - ${'sensor.' + vars[0] + '_kw_total'}
+  - ${'sensor.kw_total_' + vars[0]}
+card:
+  type: vertical-stack
+  cards:
+    - type: custom:button-card
+      entity: >-
+        ${((states['switch.' + vars[0] + '_ibeplug']) && ('switch.' + vars[0] +
+        '_ibeplug')) || ('switch.ibeplug_' + vars[0])}
+      name: ${('' + vars[0]).toUpperCase()}
+      show_icon: false
+      show_state: false
+      show_label: false
+      variables:
+        base: ${vars[0]}
+        logo_src: ${vars[1]}
+      triggers_update: all
+      custom_fields:
+        logo: |
+          [[[
+            const toUrl = (p) => {
+              if (hass && typeof hass.hassUrl === 'function') return hass.hassUrl(p);
+              return p;
+            };
+            const primary = String(variables.logo_src || '/ibepower_static/ibepower_logo.png');
+            const fallback = '/local/ibepower_logo.png';
+            const src = toUrl(primary);
+            const fallbackSrc = toUrl(fallback);
+            return '<div class="ibep-brand-logo-wrap"><img class="ibep-brand-logo" src="' + src + '" data-fallback="' + fallbackSrc + '" onerror="if(!this.dataset.err){this.dataset.err=\'1\';this.src=this.dataset.fallback;}" alt="Ibepower"></div>';
+          ]]]
+        flow: |
+          [[[
+            const base = variables.base;
+            const safeStates = (states && typeof states === 'object') ? states : {};
+            const invalidState = (state) => {
+              const s = String(state ?? '').trim().toLowerCase();
+              return !s || s === 'unknown' || s === 'unavailable' || s === 'none' || s === 'null';
+            };
+            const getSensorObj = (field) => safeStates['sensor.' + base + '_' + field] || safeStates['sensor.' + field + '_' + base];
+            const getSwitchObj = () => safeStates['switch.' + base + '_ibeplug'] || safeStates['switch.ibeplug_' + base];
+            const hasEntity = (field) => {
+              const obj = getSensorObj(field);
+              return !!obj && !invalidState(obj.state);
+            };
+            const num = (field) => {
+              const raw = String((getSensorObj(field)?.state) ?? '').replace(',', '.');
+              const v = Number(raw);
+              return Number.isFinite(v) ? v : 0;
+            };
+            const fmtUnit = (v, unit, digits) => {
+              const n = Number(v);
+              return Number.isFinite(n) ? (n.toFixed(digits) + ' ' + unit) : ('-- ' + unit);
+            };
+            const fmtK = (v) => {
+              const n = Number(v);
+              return Number.isFinite(n) ? (n.toFixed(2) + ' kWh') : '-- kWh';
+            };
+
+            const switchObj = getSwitchObj();
+            const isOn = switchObj && switchObj.state === 'on';
+            const switchEntityId = switchObj ? switchObj.entity_id : '';
+
+            const powerW = hasEntity('power') ? num('power') : null;
+            const voltageV = hasEntity('voltage') ? num('voltage') : null;
+            const currentA = hasEntity('current') ? num('current') : null;
+            const factorPct = hasEntity('factor') ? num('factor') : null;
+            const kwToday = hasEntity('consumption') ? num('consumption') : null;
+            const kwYesterday = hasEntity('kw_yesterday') ? num('kw_yesterday') : null;
+            const kwTotal = hasEntity('kw_total') ? num('kw_total') : null;
+
+            const powerActive = powerW !== null && Math.abs(powerW) > 0;
+
+            // Barra de potencia  (máx dinámico basado en pico histórico)
+            const storageKey = 'ibep_plug_peak_' + base;
+            const absPower = powerW !== null ? Math.abs(powerW) : 0;
+            let peakW = Number(localStorage.getItem(storageKey)) || 0;
+            if (absPower > peakW) { peakW = absPower; localStorage.setItem(storageKey, String(peakW)); }
+            const maxRef = peakW > 0 ? peakW : 0;
+            const barPct = maxRef > 0 ? Math.min(100, Math.max(0, Math.round((absPower / maxRef) * 100))) : 0;
+            const barColor = barPct > 75 ? '#e74c3c' : barPct > 40 ? '#f39c12' : '#2ecc71';
+
+            const browserLang = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : '';
+            const rawLang = String(
+              hass?.language ||
+              hass?.selectedLanguage ||
+              hass?.locale?.language ||
+              browserLang ||
+              'en'
+            ).toLowerCase();
+            const lang = rawLang.startsWith('es')
+              ? 'es'
+              : rawLang.startsWith('pt')
+                ? 'pt'
+                : 'en';
+            const i18n = {
+              es: { on: 'Encendido', off: 'Apagado', today: 'Hoy', yesterday: 'Ayer', total: 'Total', power: 'Potencia', voltage: 'Tensión', current: 'Intensidad', pf: 'Factor P.', energy: 'Energía', peak: 'Máx' },
+              en: { on: 'On', off: 'Off', today: 'Today', yesterday: 'Yesterday', total: 'Total', power: 'Power', voltage: 'Voltage', current: 'Current', pf: 'Power F.', energy: 'Energy', peak: 'Peak' },
+              pt: { on: 'Ligado', off: 'Desligado', today: 'Hoje', yesterday: 'Ontem', total: 'Total', power: 'Potência', voltage: 'Tensão', current: 'Corrente', pf: 'Fator P.', energy: 'Energia', peak: 'Máx' }
+            };
+            const t = i18n[lang] || i18n.en;
+
+            const p = [];
+
+            // ── Panel interior ──
+            p.push('<div class="ibep-plug-panel" style="width:100%;max-width:460px;box-sizing:border-box;overflow:hidden;">');
+
+            // ── Botón toggle ON / OFF ──
+            p.push(
+              '<div class="ibep-plug-toggle ', (isOn ? 'is-on' : 'is-off'), '" data-switch="', switchEntityId, '">',
+                '<div class="ibep-plug-icon-ring">',
+                  '<ha-icon icon="mdi:power-plug" style="--mdc-icon-size:40px; color:', (isOn ? '#4cdf6b' : '#aaa'), ';"></ha-icon>',
+                '</div>',
+                '<div class="ibep-plug-status">', (isOn ? t.on : t.off), '</div>',
+              '</div>'
+            );
+
+            // ── Barra de potencia ──
+            p.push(
+              '<div class="ibep-power-section">',
+                '<div class="ibep-power-label">', t.power, '</div>',
+                '<div class="ibep-power-value">', (powerW !== null ? (Math.round(powerW) + ' W') : '-- W'), '</div>',
+                '<div class="ibep-power-peak">', t.peak, ': ', (peakW > 0 ? (Math.round(peakW) + ' W') : '-- W'), '</div>',
+                '<div class="ibep-power-bar-track">',
+                  '<div class="ibep-power-bar-fill" style="width:', barPct, '%; background:', barColor, ';"></div>',
+                '</div>',
+              '</div>'
+            );
+
+            // ── Métricas ──
+            p.push('<div class="ibep-metrics">');
+
+            // Tensión
+            p.push(
+              '<div class="ibep-metric">',
+                '<ha-icon icon="mdi:flash" style="--mdc-icon-size:20px; color:#f1c40f;"></ha-icon>',
+                '<div class="ibep-metric-val">', fmtUnit(voltageV, 'V', 1), '</div>',
+                '<div class="ibep-metric-lbl">', t.voltage, '</div>',
+              '</div>'
+            );
+
+            // Intensidad
+            p.push(
+              '<div class="ibep-metric">',
+                '<ha-icon icon="mdi:current-ac" style="--mdc-icon-size:20px; color:#3498db;"></ha-icon>',
+                '<div class="ibep-metric-val">', fmtUnit(currentA, 'A', 2), '</div>',
+                '<div class="ibep-metric-lbl">', t.current, '</div>',
+              '</div>'
+            );
+
+            // Factor de potencia
+            p.push(
+              '<div class="ibep-metric">',
+                '<ha-icon icon="mdi:cosine-wave" style="--mdc-icon-size:20px; color:#9b59b6;"></ha-icon>',
+                '<div class="ibep-metric-val">', fmtUnit(factorPct, '%', 0), '</div>',
+                '<div class="ibep-metric-lbl">', t.pf, '</div>',
+              '</div>'
+            );
+
+            p.push('</div>'); // metrics
+
+            // ── Energía acumulada ──
+            p.push(
+              '<div class="ibep-energy-section">',
+                '<div class="ibep-energy-title">', t.energy, '</div>',
+                '<div class="ibep-energy-rows">',
+                  '<div class="ibep-energy-row"><span class="ibep-energy-lbl">', t.today, '</span><span class="ibep-energy-val">', fmtK(kwToday), '</span></div>',
+                  '<div class="ibep-energy-row"><span class="ibep-energy-lbl">', t.yesterday, '</span><span class="ibep-energy-val">', fmtK(kwYesterday), '</span></div>',
+                  '<div class="ibep-energy-row"><span class="ibep-energy-lbl">', t.total, '</span><span class="ibep-energy-val">', fmtK(kwTotal), '</span></div>',
+                '</div>',
+              '</div>'
+            );
+
+            p.push('</div>'); // panel
+
+            // ── Click / tap handler ──
+            if (!window._ibepPlugCardClickHandler) {
+              window._ibepPlugCardClickHandler = true;
+              const ibepToggle = (e) => {
+                const path = e.composedPath();
+                for (const el of path) {
+                  if (el.classList && el.classList.contains('ibep-plug-toggle') && el.hasAttribute && el.hasAttribute('data-switch')) {
+                    const eid = el.getAttribute('data-switch');
+                    if (eid && hass) {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      hass.callService('switch', 'toggle', { entity_id: eid });
+                    }
+                    break;
+                  }
+                }
+              };
+              document.addEventListener('click', ibepToggle, true);
+            }
+
+            return p.join('');
+          ]]]
+      styles:
+        card:
+          - border-radius: 24px
+          - padding: 16px 16px 12px
+          - overflow: hidden
+          - box-sizing: border-box
+          - border: 1px solid rgba(120, 220, 80, 0.90)
+          - background: >-
+              radial-gradient(circle at 18% 14%, rgba(255, 185, 0, 0.32),
+              transparent 40%), radial-gradient(circle at 84% 85%, rgba(0, 210,
+              255, 0.22), transparent 44%), radial-gradient(circle at 50% 88%,
+              rgba(140, 230, 60, 0.18), transparent 48%),
+              linear-gradient(145deg, rgba(38, 118, 58, 0.92), rgba(52, 148, 74,
+              0.90))
+          - box-shadow: 0 8px 32px rgba(0, 0, 0, 0.58)
+        name:
+          - justify-self: center
+          - color: "#ffffff"
+          - font-size: 1.35rem
+          - font-weight: 700
+          - letter-spacing: 0.04em
+          - text-transform: uppercase
+          - text-align: center
+          - text-shadow: 0 1px 4px rgba(0,0,0,0.55)
+          - width: 100%
+          - padding: 4px 6px 8px
+        grid:
+          - grid-template-areas: "\"logo\" \"n\" \"flow\""
+          - grid-template-columns: 1fr
+          - row-gap: 4px
+        custom_fields:
+          logo:
+            - justify-self: center
+            - width: 100%
+            - padding-top: 2px
+          flow:
+            - justify-self: stretch
+            - width: 100%
+            - overflow: hidden
+            - box-sizing: border-box
+      extra_styles: |
+        .ibep-brand-logo-wrap {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 5px 9px;
+          border-radius: 10px;
+        }
+        .ibep-brand-logo {
+          display: block;
+          width: min(46vw, 180px);
+          max-width: 100%;
+          height: auto;
+          object-fit: contain;
+        }
+        /* ── Panel interior ── */
+        .ibep-plug-panel {
+          width: 100%;
+          max-width: 460px;
+          margin: 2px auto 0;
+          border-radius: 16px;
+          overflow: hidden;
+          background: rgba(10, 18, 28, 0.35);
+          border: 1px solid rgba(255, 255, 255, 0.10);
+          padding: 18px 16px 14px;
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 14px;
+        }
+        /* ── Toggle button ── */
+        .ibep-plug-toggle {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 6px;
+          cursor: pointer;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .ibep-plug-icon-ring {
+          width: 80px;
+          height: 80px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 3px solid rgba(255,255,255,0.18);
+          background: rgba(255,255,255,0.08);
+          transition: all 0.3s ease;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+        }
+        .ibep-plug-toggle.is-on .ibep-plug-icon-ring {
+          border-color: rgba(76, 223, 107, 0.7);
+          background: rgba(76, 223, 107, 0.12);
+          box-shadow: 0 0 20px rgba(76, 223, 107, 0.35), 0 2px 12px rgba(0,0,0,0.25);
+          animation: plugGlow 2s ease-in-out infinite;
+        }
+        .ibep-plug-toggle.is-off .ibep-plug-icon-ring {
+          border-color: rgba(170, 170, 170, 0.35);
+          background: rgba(170, 170, 170, 0.08);
+        }
+        .ibep-plug-status {
+          font-size: 0.85rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: rgba(255,255,255,0.85);
+        }
+        .ibep-plug-toggle.is-on .ibep-plug-status {
+          color: #4cdf6b;
+        }
+        .ibep-plug-toggle.is-off .ibep-plug-status {
+          color: rgba(255,255,255,0.45);
+        }
+        /* ── Power bar ── */
+        .ibep-power-section {
+          width: 100%;
+          text-align: center;
+          box-sizing: border-box;
+          overflow: hidden;
+        }
+        .ibep-power-label {
+          font-size: 0.7rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: rgba(255,255,255,0.55);
+          margin-bottom: 2px;
+        }
+        .ibep-power-value {
+          font-size: 1.6rem;
+          font-weight: 700;
+          color: #ffffff;
+          text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+          margin-bottom: 6px;
+        }
+        .ibep-power-bar-track {
+          width: 100%;
+          height: 6px;
+          border-radius: 3px;
+          background: rgba(255,255,255,0.12);
+          overflow: hidden;
+        }
+        .ibep-power-bar-fill {
+          height: 100%;
+          border-radius: 3px;
+          transition: width 0.6s ease, background 0.6s ease;
+        }
+        .ibep-power-peak {
+          font-size: 0.85rem;
+          font-weight: 600;
+          color: #ffffff;
+          text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+          text-align: right;
+          margin-bottom: 2px;
+        }
+        /* ── Metrics row ── */
+        .ibep-metrics {
+          display: flex;
+          justify-content: space-around;
+          width: 100%;
+          gap: 4px;
+          box-sizing: border-box;
+          overflow: hidden;
+        }
+        .ibep-metric {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 2px;
+          flex: 1;
+          min-width: 0;
+          overflow: hidden;
+          max-width: 100%;
+        }
+        .ibep-metric-val {
+          font-size: 1.05rem;
+          font-weight: 700;
+          color: #ffffff;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 100%;
+        }
+        .ibep-metric-lbl {
+          font-size: 0.63rem;
+          font-weight: 600;
+          color: rgba(255,255,255,0.5);
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+        }
+        /* ── Energy section ── */
+        .ibep-energy-section {
+          width: 100%;
+          background: rgba(255,255,255,0.06);
+          border-radius: 10px;
+          padding: 10px 12px;
+          box-sizing: border-box;
+          overflow: hidden;
+        }
+        .ibep-energy-title {
+          display: flex;
+          align-items: center;
+          font-size: 0.78rem;
+          font-weight: 700;
+          color: rgba(255,255,255,0.75);
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          margin-bottom: 8px;
+        }
+        .ibep-energy-rows {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .ibep-energy-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .ibep-energy-lbl {
+          font-size: 0.72rem;
+          font-weight: 600;
+          color: rgba(255,255,255,0.5);
+        }
+        .ibep-energy-val {
+          font-size: 0.82rem;
+          font-weight: 700;
+          color: #ffffff;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        /* ── Animations ── */
+        @keyframes plugGlow {
+          0%, 100% { box-shadow: 0 0 20px rgba(76, 223, 107, 0.35), 0 2px 12px rgba(0,0,0,0.25); }
+          50% { box-shadow: 0 0 28px rgba(76, 223, 107, 0.55), 0 2px 12px rgba(0,0,0,0.25); }
+        }
+        @media (max-width: 540px) {
+          .ibep-plug-panel { padding: 14px 12px 10px; gap: 10px; }
+          .ibep-plug-icon-ring { width: 68px; height: 68px; }
+          .ibep-power-value { font-size: 1.3rem; }
+          .ibep-metric-val { font-size: 0.92rem; }
+        }
