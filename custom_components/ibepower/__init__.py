@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from datetime import timedelta
 from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -18,6 +19,8 @@ PLATFORMS = ["switch", "sensor", "select", "number", "button"]
 STATIC_URL_PATH = "/ibepower_static"
 STATIC_DIR_PATH = Path(__file__).resolve().parent / "www"
 STATIC_REGISTERED_KEY = "_static_path_registered"
+CARD_JS_URL = STATIC_URL_PATH + "/ibepower-cards.js"
+CARD_JS_REGISTERED_KEY = "_card_js_registered"
 
 
 async def _async_register_static_path(hass: HomeAssistant) -> None:
@@ -33,6 +36,15 @@ async def _async_register_static_path(hass: HomeAssistant) -> None:
         [StaticPathConfig(STATIC_URL_PATH, str(STATIC_DIR_PATH), cache_headers=False)]
     )
     domain_data[STATIC_REGISTERED_KEY] = True
+
+
+async def _async_register_card_js(hass: HomeAssistant) -> None:
+    """Register the custom Lovelace card JS so it appears in the card picker."""
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    if domain_data.get(CARD_JS_REGISTERED_KEY):
+        return
+    add_extra_js_url(hass, CARD_JS_URL)
+    domain_data[CARD_JS_REGISTERED_KEY] = True
 
 
 async def _async_migrate_entity_ids(hass: HomeAssistant, entry: ConfigEntry):
@@ -87,6 +99,7 @@ async def _async_migrate_entity_ids(hass: HomeAssistant, entry: ConfigEntry):
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     await _async_register_static_path(hass)
+    await _async_register_card_js(hass)
 
     host = entry.data["host"]
     name = entry.data["name"]

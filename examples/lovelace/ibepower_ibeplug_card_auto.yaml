@@ -1,0 +1,749 @@
+# IBePlug – Selector gráfico auto-detectado
+
+type: custom:button-card
+triggers_update: all
+show_name: false
+show_icon: false
+show_state: false
+show_label: false
+tap_action:
+  action: none
+hold_action:
+  action: none
+double_tap_action:
+  action: none
+variables:
+  logo_src: "/ibepower_static/ibepower_logo.png"
+custom_fields:
+  logo: |
+    [[[
+      const toUrl = (p) => {
+        if (hass && typeof hass.hassUrl === 'function') return hass.hassUrl(p);
+        return p;
+      };
+      const primary = String(variables.logo_src || '/ibepower_static/ibepower_logo.png');
+      const fallback = '/local/ibepower_logo.png';
+      const src = toUrl(primary);
+      const fallbackSrc = toUrl(fallback);
+      return '<div class="ibep-brand-logo-wrap"><img class="ibep-brand-logo" src="' + src + '" data-fallback="' + fallbackSrc + '" onerror="if(!this.dataset.err){this.dataset.err=\'1\';this.src=this.dataset.fallback;}" alt="Ibepower"></div>';
+    ]]]
+  content: |
+    [[[
+      // i18n
+      const browserLang = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : '';
+      const rawLang = String(
+        hass?.language || hass?.selectedLanguage || hass?.locale?.language || browserLang || 'en'
+      ).toLowerCase();
+      const lang = rawLang.startsWith('es') ? 'es' : rawLang.startsWith('pt') ? 'pt' : 'en';
+      const i18n = {
+        es: { on: 'Encendido', off: 'Apagado', today: 'Hoy', yesterday: 'Ayer', total: 'Total', power: 'Potencia', voltage: 'Tensión', current: 'Intensidad', pf: 'Factor P.', energy: 'Energía', peak: 'Máx', nodev: 'No se detectaron dispositivos IBePlug' },
+        en: { on: 'On', off: 'Off', today: 'Today', yesterday: 'Yesterday', total: 'Total', power: 'Power', voltage: 'Voltage', current: 'Current', pf: 'Power F.', energy: 'Energy', peak: 'Peak', nodev: 'No IBePlug devices detected' },
+        pt: { on: 'Ligado', off: 'Desligado', today: 'Hoje', yesterday: 'Ontem', total: 'Total', power: 'Potência', voltage: 'Tensão', current: 'Corrente', pf: 'Fator P.', energy: 'Energia', peak: 'Máx', nodev: 'Nenhum IBePlug detectado' }
+      };
+      const t = i18n[lang] || i18n.en;
+
+      // Auto-detección de dispositivos
+      const safeStates = (states && typeof states === 'object') ? states : {};
+      const _devReg = (hass && hass.devices) ? hass.devices : {};
+      const _entReg = (hass && hass.entities) ? hass.entities : {};
+      const _plugDevIds = new Set(Object.values(_devReg)
+        .filter(d => d.model === 'Ibeplug')
+        .map(d => d.id));
+      const _plugEntityIds = Object.keys(_entReg)
+        .filter(eid => eid.startsWith('switch.') && _plugDevIds.has(_entReg[eid].device_id));
+      const slugs = [...new Set(_plugEntityIds.map(eid => {
+        let m = eid.match(/^switch\.(.+)_ibeplug$/);
+        if (m) return m[1];
+        m = eid.match(/^switch\.ibeplug_(.+)$/);
+        if (m) return m[1];
+        return null;
+      }).filter(Boolean))].sort();
+
+      if (slugs.length === 0) {
+        return '<div style="color:#fff;text-align:center;padding:24px;font-size:1.05rem;opacity:0.8;">' + t.nodev + '</div>';
+      }
+
+      // Selección persistente
+      const selKey = 'ibep_plug_selector';
+      let base = localStorage.getItem(selKey);
+      if (!base || slugs.indexOf(base) === -1) {
+        base = slugs[0];
+        localStorage.setItem(selKey, base);
+      }
+
+      const p = [];
+
+      // Selector desplegable
+      const ddOpenKey = 'ibep_plug_dd_open';
+      if (slugs.length > 1) {
+        const ddIsOpen = localStorage.getItem(ddOpenKey) === '1';
+        const opts = slugs.map(s =>
+          '<div class="ibep-dd-option' + (s === base ? ' active' : '') + '" data-ibep-val="' + s + '">' +
+          '<span>' + s.replace(/_/g, ' ') + '</span>' +
+          '</div>'
+        ).join('');
+        p.push(
+          '<div class="ibep-dd' + (ddIsOpen ? ' open' : '') + '">',
+            '<div class="ibep-dd-header" data-ibep-toggle-dd="1">',
+              '<span class="ibep-dd-current">', base.replace(/_/g, ' '), '</span>',
+              '<ha-icon icon="mdi:chevron-down" class="ibep-dd-arrow" style="--mdc-icon-size:20px;color:rgba(255,255,255,0.6);"></ha-icon>',
+            '</div>',
+            '<div class="ibep-dd-list">', opts, '</div>',
+          '</div>'
+        );
+      }
+
+      // Handler global
+      var _IBEP_VER = 18;
+      window._ibepSelectorHass = hass;
+      if (window._ibepHandlerVer !== _IBEP_VER) {
+        if (window._ibepClickFn) {
+          document.removeEventListener('click', window._ibepClickFn, true);
+        }
+        window._ibepHandlerVer = _IBEP_VER;
+
+        window._ibepClickFn = function(e) {
+          var path = e.composedPath();
+          var handled = false;
+
+          // Dropdown activo
+          var findDd = function(p) {
+            for (var x = 0; x < p.length; x++) {
+              if (p[x].classList && p[x].classList.contains('ibep-dd')) return p[x];
+            }
+            return null;
+          };
+          // Dropdowns abiertos
+          var findAllOpenDd = function(p) {
+            var result = [];
+            for (var x = 0; x < p.length; x++) {
+              var sr = p[x].shadowRoot;
+              if (sr) {
+                sr.querySelectorAll('.ibep-dd.open').forEach(function(d) { result.push(d); });
+              }
+            }
+            return result;
+          };
+          var updateDdUiSelection = function(dd, selected) {
+            if (!dd || !selected) return;
+            var current = dd.querySelector('.ibep-dd-current');
+            if (current) current.textContent = String(selected).replace(/_/g, ' ');
+            var opts = dd.querySelectorAll('.ibep-dd-option');
+            for (var k = 0; k < opts.length; k++) {
+              var opt = opts[k];
+              var isActive = opt.getAttribute('data-ibep-val') === selected;
+              if (isActive) opt.classList.add('active');
+              else opt.classList.remove('active');
+            }
+          };
+
+          for (var i = 0; i < path.length; i++) {
+            var el = path[i];
+            if (!el || !el.getAttribute) continue;
+
+            // Toggle dropdown
+            if (el.getAttribute('data-ibep-toggle-dd')) {
+              e.stopImmediatePropagation();
+              e.preventDefault();
+              var wasOpen = localStorage.getItem('ibep_plug_dd_open') === '1';
+              localStorage.setItem('ibep_plug_dd_open', wasOpen ? '0' : '1');
+              var dd = findDd(path);
+              if (dd) {
+                if (wasOpen) dd.classList.remove('open');
+                else dd.classList.add('open');
+              }
+              handled = true;
+              break;
+            }
+
+            // Selección de opción
+            if (el.getAttribute('data-ibep-val')) {
+              e.stopImmediatePropagation();
+              e.preventDefault();
+              var selected = el.getAttribute('data-ibep-val');
+              localStorage.setItem('ibep_plug_selector', selected);
+              localStorage.setItem('ibep_plug_dd_open', '0');
+              var dd2 = findDd(path);
+              if (dd2) dd2.classList.remove('open');
+              updateDdUiSelection(dd2, selected);
+              // Forzar re-render de la tarjeta para actualizar toggle, métricas y energía
+              setTimeout(function() {
+                for (var j = 0; j < path.length; j++) {
+                  if (path[j] && path[j]._hass) {
+                    path[j].hass = path[j]._hass;
+                    break;
+                  }
+                }
+              }, 16);
+              handled = true;
+              break;
+            }
+
+            // Toggle ON/OFF
+            if (el.classList && el.classList.contains('ibep-plug-toggle')) {
+              e.stopImmediatePropagation();
+              e.preventDefault();
+              try {
+                var hassObj = window._ibepSelectorHass;
+                if (!hassObj || typeof hassObj.callService !== 'function') {
+                  var ha = document.querySelector('home-assistant');
+                  if (ha && ha.hass) hassObj = ha.hass;
+                }
+                // Resolver siempre desde localStorage (dispositivo seleccionado actualmente)
+                var eid = '';
+                if (hassObj && hassObj.states) {
+                  var selectedBase = localStorage.getItem('ibep_plug_selector') || '';
+                  var e1 = 'switch.' + selectedBase + '_ibeplug';
+                  var e2 = 'switch.ibeplug_' + selectedBase;
+                  if (hassObj.states[e1]) eid = e1;
+                  else if (hassObj.states[e2]) eid = e2;
+                }
+                // Fallback al atributo data-switch solo si localStorage no resolvió
+                if (!eid) eid = el.getAttribute('data-switch') || '';
+                if (eid && eid !== 'undefined' && hassObj) hassObj.callService('switch', 'toggle', { entity_id: eid });
+              } catch(x) {}
+              handled = true;
+              break;
+            }
+          }
+
+          // Cierre de dropdown al hacer click fuera
+          if (!handled) {
+            if (localStorage.getItem('ibep_plug_dd_open') === '1') {
+              localStorage.setItem('ibep_plug_dd_open', '0');
+            }
+            var openDds = findAllOpenDd(path);
+            openDds.forEach(function(d) { d.classList.remove('open'); });
+          }
+        };
+
+        document.addEventListener('click', window._ibepClickFn, true);
+      }
+
+      // Nombre del dispositivo
+      if (slugs.length <= 1) {
+        p.push('<div class="ibep-device-name">', base.replace(/_/g, ' ').toUpperCase(), '</div>');
+      }
+
+      // Entidades del dispositivo seleccionado
+      const invalidState = (state) => {
+        const s = String(state ?? '').trim().toLowerCase();
+        return !s || s === 'unknown' || s === 'unavailable' || s === 'none' || s === 'null';
+      };
+      const getSensorObj = (field) => safeStates['sensor.' + base + '_' + field] || safeStates['sensor.' + field + '_' + base];
+      const getSwitchEntityId = () => {
+        const e1 = 'switch.' + base + '_ibeplug';
+        const e2 = 'switch.ibeplug_' + base;
+        if (safeStates[e1]) return e1;
+        if (safeStates[e2]) return e2;
+        return '';
+      };
+      const getSwitchObj = () => {
+        const eid = getSwitchEntityId();
+        return eid ? safeStates[eid] : null;
+      };
+      const getPowerEntityId = () => {
+        const e1 = 'sensor.' + base + '_power';
+        const e2 = 'sensor.power_' + base;
+        if (safeStates[e1]) return e1;
+        if (safeStates[e2]) return e2;
+        return '';
+      };
+      const hasEntity = (field) => {
+        const obj = getSensorObj(field);
+        return !!obj && !invalidState(obj.state);
+      };
+      const num = (field) => {
+        const raw = String((getSensorObj(field)?.state) ?? '').replace(',', '.');
+        const v = Number(raw);
+        return Number.isFinite(v) ? v : 0;
+      };
+      const fmtUnit = (v, unit, digits) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? (n.toFixed(digits) + ' ' + unit) : ('-- ' + unit);
+      };
+      const fmtK = (v) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? (n.toFixed(2) + ' kWh') : '-- kWh';
+      };
+
+      const switchEntityId = getSwitchEntityId();
+      const switchObj = getSwitchObj();
+      const isOn = switchObj && switchObj.state === 'on';
+
+      const powerW = hasEntity('power') ? num('power') : null;
+      const voltageV = hasEntity('voltage') ? num('voltage') : null;
+      const currentA = hasEntity('current') ? num('current') : null;
+      const factorPct = hasEntity('factor') ? num('factor') : null;
+      const kwToday = hasEntity('consumption') ? num('consumption') : null;
+      const kwYesterday = hasEntity('kw_yesterday') ? num('kw_yesterday') : null;
+      const kwTotal = hasEntity('kw_total') ? num('kw_total') : null;
+
+      // Barra de potencia (máx desde historial de HA + fallback local)
+      const peakKey = 'ibep_plug_peak_' + base;
+      const histPeakKey = 'ibep_plug_peak_hist_' + base;
+      const histPeakTsKey = 'ibep_plug_peak_hist_ts_' + base;
+      const peakFetchTtlMs = 10 * 60 * 1000;
+      const absPower = powerW !== null ? Math.abs(powerW) : 0;
+      const localPeakW = Number(localStorage.getItem(peakKey)) || 0;
+      const histPeakW = Number(localStorage.getItem(histPeakKey)) || 0;
+      const histTs = Number(localStorage.getItem(histPeakTsKey)) || 0;
+      let peakW = Math.max(localPeakW, histPeakW);
+      if (absPower > peakW) { peakW = absPower; localStorage.setItem(peakKey, String(peakW)); }
+
+      const powerEntityId = getPowerEntityId();
+      const nowMs = Date.now();
+      const shouldRefreshHistPeak = !!powerEntityId && (!histTs || (nowMs - histTs) > peakFetchTtlMs);
+      if (shouldRefreshHistPeak && hass && typeof hass.callApi === 'function') {
+        if (!window._ibepPeakFetchInflight) window._ibepPeakFetchInflight = {};
+        if (!window._ibepPeakFetchInflight[base]) {
+          window._ibepPeakFetchInflight[base] = true;
+          const endIso = new Date().toISOString();
+          const startIso = new Date(nowMs - (30 * 24 * 60 * 60 * 1000)).toISOString();
+          const historyPath =
+            '/api/history/period/' + encodeURIComponent(startIso) +
+            '?filter_entity_id=' + encodeURIComponent(powerEntityId) +
+            '&end_time=' + encodeURIComponent(endIso) +
+            '&minimal_response&no_attributes';
+
+          hass.callApi('GET', historyPath)
+            .then((rows) => {
+              let maxFromHistory = 0;
+              if (Array.isArray(rows) && Array.isArray(rows[0])) {
+                for (let i = 0; i < rows[0].length; i++) {
+                  const st = rows[0][i] && rows[0][i].state;
+                  const value = Math.abs(Number(String(st ?? '').replace(',', '.')));
+                  if (Number.isFinite(value) && value > maxFromHistory) maxFromHistory = value;
+                }
+              }
+              if (maxFromHistory > 0) {
+                localStorage.setItem(histPeakKey, String(maxFromHistory));
+                localStorage.setItem(histPeakTsKey, String(Date.now()));
+                if (maxFromHistory > peakW) localStorage.setItem(peakKey, String(maxFromHistory));
+              } else {
+                localStorage.setItem(histPeakTsKey, String(Date.now()));
+              }
+            })
+            .catch(() => {
+              localStorage.setItem(histPeakTsKey, String(Date.now()));
+            })
+            .finally(() => {
+              delete window._ibepPeakFetchInflight[base];
+            });
+        }
+      }
+
+      const maxRef = peakW > 0 ? peakW : 0;
+      const barPct = maxRef > 0 ? Math.min(100, Math.max(0, Math.round((absPower / maxRef) * 100))) : 0;
+      const barColor = barPct > 75 ? '#e74c3c' : barPct > 40 ? '#f39c12' : '#2ecc71';
+
+      // Panel interior
+      p.push('<div class="ibep-plug-panel" style="width:100%;max-width:460px;box-sizing:border-box;overflow:hidden;">');
+
+      // Botón ON/OFF
+      p.push(
+        '<div class="ibep-plug-toggle ', (isOn ? 'is-on' : 'is-off'), '" data-switch="', switchEntityId, '">',
+          '<div class="ibep-plug-icon-ring">',
+            '<ha-icon icon="mdi:power-plug" style="--mdc-icon-size:40px; color:', (isOn ? '#4cdf6b' : '#aaa'), ';"></ha-icon>',
+          '</div>',
+          '<div class="ibep-plug-status">', (isOn ? t.on : t.off), '</div>',
+        '</div>'
+      );
+
+      // Bloque de potencia
+      p.push(
+        '<div class="ibep-power-section">',
+          '<div class="ibep-power-label">', t.power, '</div>',
+          '<div class="ibep-power-value">', (powerW !== null ? (Math.round(powerW) + ' W') : '-- W'), '</div>',
+          '<div class="ibep-power-peak">', t.peak, ': ', (peakW > 0 ? (Math.round(peakW) + ' W') : '-- W'), '</div>',
+          '<div class="ibep-power-bar-track">',
+            '<div class="ibep-power-bar-fill" style="width:', barPct, '%; background:', barColor, ';"></div>',
+          '</div>',
+        '</div>'
+      );
+
+      // Métricas
+      p.push('<div class="ibep-metrics">');
+      p.push(
+        '<div class="ibep-metric">',
+          '<ha-icon icon="mdi:flash" style="--mdc-icon-size:20px; color:#f1c40f;"></ha-icon>',
+          '<div class="ibep-metric-val">', fmtUnit(voltageV, 'V', 1), '</div>',
+          '<div class="ibep-metric-lbl">', t.voltage, '</div>',
+        '</div>'
+      );
+      p.push(
+        '<div class="ibep-metric">',
+          '<ha-icon icon="mdi:current-ac" style="--mdc-icon-size:20px; color:#3498db;"></ha-icon>',
+          '<div class="ibep-metric-val">', fmtUnit(currentA, 'A', 2), '</div>',
+          '<div class="ibep-metric-lbl">', t.current, '</div>',
+        '</div>'
+      );
+      p.push(
+        '<div class="ibep-metric">',
+          '<ha-icon icon="mdi:cosine-wave" style="--mdc-icon-size:20px; color:#9b59b6;"></ha-icon>',
+          '<div class="ibep-metric-val">', fmtUnit(factorPct, '%', 0), '</div>',
+          '<div class="ibep-metric-lbl">', t.pf, '</div>',
+        '</div>'
+      );
+      p.push('</div>');
+
+      // Energía acumulada
+      p.push(
+        '<div class="ibep-energy-section">',
+          '<div class="ibep-energy-title">', t.energy, '</div>',
+          '<div class="ibep-energy-rows">',
+            '<div class="ibep-energy-row"><span class="ibep-energy-lbl">', t.today, '</span><span class="ibep-energy-val">', fmtK(kwToday), '</span></div>',
+            '<div class="ibep-energy-row"><span class="ibep-energy-lbl">', t.yesterday, '</span><span class="ibep-energy-val">', fmtK(kwYesterday), '</span></div>',
+            '<div class="ibep-energy-row"><span class="ibep-energy-lbl">', t.total, '</span><span class="ibep-energy-val">', fmtK(kwTotal), '</span></div>',
+          '</div>',
+        '</div>'
+      );
+
+      p.push('</div>');
+
+      return p.join('');
+    ]]]
+styles:
+  card:
+    - border-radius: 24px
+    - padding: 16px 16px 12px
+    - overflow: visible
+    - box-sizing: border-box
+    - border: 1px solid rgba(120, 220, 80, 0.90)
+    - background: >-
+        radial-gradient(circle at 18% 14%, rgba(255, 185, 0, 0.32),
+        transparent 40%), radial-gradient(circle at 84% 85%, rgba(0, 210,
+        255, 0.22), transparent 44%), radial-gradient(circle at 50% 88%,
+        rgba(140, 230, 60, 0.18), transparent 48%),
+        linear-gradient(145deg, rgba(38, 118, 58, 0.92), rgba(52, 148, 74,
+        0.90))
+    - box-shadow: 0 8px 32px rgba(0, 0, 0, 0.58)
+  grid:
+    - grid-template-areas: "\"logo\" \"content\""
+    - grid-template-columns: 1fr
+    - row-gap: 4px
+  custom_fields:
+    logo:
+      - justify-self: center
+      - width: 100%
+      - padding-top: 2px
+    content:
+      - justify-self: stretch
+      - width: 100%
+      - overflow: visible
+      - box-sizing: border-box
+extra_styles: |
+  .ibep-brand-logo-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 9px;
+    border-radius: 10px;
+  }
+  .ibep-brand-logo {
+    display: block;
+    width: min(46vw, 180px);
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+  }
+  /* Desplegable */
+  .ibep-dd {
+    position: relative;
+    width: 100%;
+    max-width: 280px;
+    margin: 0 auto 10px;
+    z-index: 1;
+  }
+  .ibep-dd-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 12px;
+    padding: 8px 14px;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: border-color 0.2s ease, background 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .ibep-dd-header:hover {
+    border-color: rgba(76, 223, 107, 0.7);
+    background: rgba(255,255,255,0.18);
+  }
+  .ibep-dd.open .ibep-dd-header {
+    border-color: rgba(76, 223, 107, 0.7);
+    background: rgba(255,255,255,0.18);
+    border-radius: 12px 12px 0 0;
+  }
+  .ibep-dd-current {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #ffffff;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.55);
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ibep-dd-arrow {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    transition: transform 0.25s ease;
+  }
+  .ibep-dd.open .ibep-dd-arrow {
+    transform: translateY(-50%) rotate(180deg);
+  }
+  .ibep-dd-list {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    background: rgba(20, 35, 20, 0.96);
+    border: none;
+    border-radius: 0 0 12px 12px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: none;
+  }
+  .ibep-dd.open .ibep-dd-list {
+    max-height: 300px;
+    border: 1px solid rgba(76, 223, 107, 0.5);
+    border-top: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .ibep-dd-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: rgba(255,255,255,0.8);
+    text-transform: capitalize;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: background 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .ibep-dd-option:hover {
+    background: rgba(76, 223, 107, 0.15);
+    color: #ffffff;
+  }
+  .ibep-dd-option.active {
+    color: #4cdf6b;
+    font-weight: 700;
+    background: rgba(76, 223, 107, 0.08);
+  }
+  .ibep-dd-option:last-child {
+    border-radius: 0 0 12px 12px;
+  }
+  /* Nombre del dispositivo */
+  .ibep-device-name {
+    text-align: center;
+    color: #ffffff;
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.55);
+    padding: 4px 6px 8px;
+  }
+  /* Panel interior */
+  .ibep-plug-panel {
+    width: 100%;
+    max-width: 460px;
+    margin: 2px auto 0;
+    border-radius: 16px;
+    overflow: hidden;
+    background: rgba(10, 18, 28, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    padding: 18px 16px 14px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+  /* Botón toggle */
+  .ibep-plug-toggle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    pointer-events: auto;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .ibep-plug-icon-ring {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.08);
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+  }
+  .ibep-plug-toggle.is-on .ibep-plug-icon-ring {
+    border-color: rgba(76, 223, 107, 0.7);
+    background: rgba(76, 223, 107, 0.12);
+    box-shadow: 0 0 20px rgba(76, 223, 107, 0.35), 0 2px 12px rgba(0,0,0,0.25);
+    animation: plugGlow 2s ease-in-out infinite;
+  }
+  .ibep-plug-toggle.is-off .ibep-plug-icon-ring {
+    border-color: rgba(170, 170, 170, 0.35);
+    background: rgba(170, 170, 170, 0.08);
+  }
+  .ibep-plug-status {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(255,255,255,0.85);
+  }
+  .ibep-plug-toggle.is-on .ibep-plug-status {
+    color: #4cdf6b;
+  }
+  .ibep-plug-toggle.is-off .ibep-plug-status {
+    color: rgba(255,255,255,0.45);
+  }
+  /* Barra de potencia */
+  .ibep-power-section {
+    width: 100%;
+    text-align: center;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  .ibep-power-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 2px;
+  }
+  .ibep-power-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #ffffff;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    margin-bottom: 6px;
+  }
+  .ibep-power-bar-track {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.12);
+    overflow: hidden;
+  }
+  .ibep-power-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease, background 0.6s ease;
+  }
+  .ibep-power-peak {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #ffffff;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    text-align: right;
+    margin-bottom: 2px;
+  }
+  /* Métricas */
+  .ibep-metrics {
+    display: flex;
+    justify-content: space-around;
+    width: 100%;
+    gap: 4px;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  .ibep-metric {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    max-width: 100%;
+  }
+  .ibep-metric-val {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .ibep-metric-lbl {
+    font-size: 0.63rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  /* Energía */
+  .ibep-energy-section {
+    width: 100%;
+    background: rgba(255,255,255,0.06);
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  .ibep-energy-title {
+    display: flex;
+    align-items: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.75);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+  }
+  .ibep-energy-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .ibep-energy-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .ibep-energy-lbl {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.5);
+  }
+  .ibep-energy-val {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* Animaciones */
+  @keyframes plugGlow {
+    0%, 100% { box-shadow: 0 0 20px rgba(76, 223, 107, 0.35), 0 2px 12px rgba(0,0,0,0.25); }
+    50% { box-shadow: 0 0 28px rgba(76, 223, 107, 0.55), 0 2px 12px rgba(0,0,0,0.25); }
+  }
+  @media (max-width: 540px) {
+    .ibep-plug-panel { padding: 14px 12px 10px; gap: 10px; }
+    .ibep-plug-icon-ring { width: 68px; height: 68px; }
+    .ibep-power-value { font-size: 1.3rem; }
+    .ibep-metric-val { font-size: 0.92rem; }
+  }

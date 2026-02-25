@@ -56,7 +56,24 @@ card:
               return !s || s === 'unknown' || s === 'unavailable' || s === 'none' || s === 'null';
             };
             const getSensorObj = (field) => safeStates['sensor.' + base + '_' + field] || safeStates['sensor.' + field + '_' + base];
-            const getSwitchObj = () => safeStates['switch.' + base + '_ibeplug'] || safeStates['switch.ibeplug_' + base];
+            const getSwitchEntityId = () => {
+              const e1 = 'switch.' + base + '_ibeplug';
+              const e2 = 'switch.ibeplug_' + base;
+              if (safeStates[e1]) return e1;
+              if (safeStates[e2]) return e2;
+              return '';
+            };
+            const getSwitchObj = () => {
+              const eid = getSwitchEntityId();
+              return eid ? safeStates[eid] : null;
+            };
+            const getPowerEntityId = () => {
+              const e1 = 'sensor.' + base + '_power';
+              const e2 = 'sensor.power_' + base;
+              if (safeStates[e1]) return e1;
+              if (safeStates[e2]) return e2;
+              return '';
+            };
             const hasEntity = (field) => {
               const obj = getSensorObj(field);
               return !!obj && !invalidState(obj.state);
@@ -75,9 +92,9 @@ card:
               return Number.isFinite(n) ? (n.toFixed(2) + ' kWh') : '-- kWh';
             };
 
+            const switchEntityId = getSwitchEntityId();
             const switchObj = getSwitchObj();
             const isOn = switchObj && switchObj.state === 'on';
-            const switchEntityId = switchObj ? switchObj.entity_id : '';
 
             const powerW = hasEntity('power') ? num('power') : null;
             const voltageV = hasEntity('voltage') ? num('voltage') : null;
@@ -89,11 +106,60 @@ card:
 
             const powerActive = powerW !== null && Math.abs(powerW) > 0;
 
-            // Barra de potencia  (máx dinámico basado en pico histórico)
+            // Barra de potencia (máx desde historial de HA + fallback local)
             const storageKey = 'ibep_plug_peak_' + base;
+            const histPeakKey = 'ibep_plug_peak_hist_' + base;
+            const histPeakTsKey = 'ibep_plug_peak_hist_ts_' + base;
+            const peakFetchTtlMs = 10 * 60 * 1000;
             const absPower = powerW !== null ? Math.abs(powerW) : 0;
-            let peakW = Number(localStorage.getItem(storageKey)) || 0;
+            const localPeakW = Number(localStorage.getItem(storageKey)) || 0;
+            const histPeakW = Number(localStorage.getItem(histPeakKey)) || 0;
+            const histTs = Number(localStorage.getItem(histPeakTsKey)) || 0;
+            let peakW = Math.max(localPeakW, histPeakW);
             if (absPower > peakW) { peakW = absPower; localStorage.setItem(storageKey, String(peakW)); }
+
+            const powerEntityId = getPowerEntityId();
+            const nowMs = Date.now();
+            const shouldRefreshHistPeak = !!powerEntityId && (!histTs || (nowMs - histTs) > peakFetchTtlMs);
+            if (shouldRefreshHistPeak && hass && typeof hass.callApi === 'function') {
+              if (!window._ibepPeakFetchInflight) window._ibepPeakFetchInflight = {};
+              if (!window._ibepPeakFetchInflight[base]) {
+                window._ibepPeakFetchInflight[base] = true;
+                const endIso = new Date().toISOString();
+                const startIso = new Date(nowMs - (30 * 24 * 60 * 60 * 1000)).toISOString();
+                const historyPath =
+                  '/api/history/period/' + encodeURIComponent(startIso) +
+                  '?filter_entity_id=' + encodeURIComponent(powerEntityId) +
+                  '&end_time=' + encodeURIComponent(endIso) +
+                  '&minimal_response&no_attributes';
+
+                hass.callApi('GET', historyPath)
+                  .then((rows) => {
+                    let maxFromHistory = 0;
+                    if (Array.isArray(rows) && Array.isArray(rows[0])) {
+                      for (let i = 0; i < rows[0].length; i++) {
+                        const st = rows[0][i] && rows[0][i].state;
+                        const value = Math.abs(Number(String(st ?? '').replace(',', '.')));
+                        if (Number.isFinite(value) && value > maxFromHistory) maxFromHistory = value;
+                      }
+                    }
+                    if (maxFromHistory > 0) {
+                      localStorage.setItem(histPeakKey, String(maxFromHistory));
+                      localStorage.setItem(histPeakTsKey, String(Date.now()));
+                      if (maxFromHistory > peakW) localStorage.setItem(storageKey, String(maxFromHistory));
+                    } else {
+                      localStorage.setItem(histPeakTsKey, String(Date.now()));
+                    }
+                  })
+                  .catch(() => {
+                    localStorage.setItem(histPeakTsKey, String(Date.now()));
+                  })
+                  .finally(() => {
+                    delete window._ibepPeakFetchInflight[base];
+                  });
+              }
+            }
+
             const maxRef = peakW > 0 ? peakW : 0;
             const barPct = maxRef > 0 ? Math.min(100, Math.max(0, Math.round((absPower / maxRef) * 100))) : 0;
             const barColor = barPct > 75 ? '#e74c3c' : barPct > 40 ? '#f39c12' : '#2ecc71';

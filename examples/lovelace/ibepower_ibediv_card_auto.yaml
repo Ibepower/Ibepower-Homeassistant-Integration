@@ -1,6 +1,9 @@
-﻿type: custom:config-template-card
+# IBeDiv – Energy Flow Card (auto-detect)
+# No configuration needed: automatically discovers the ibediv device name.
+
+type: custom:config-template-card
 variables:
-  - "'test_no_usar'"
+  - "localStorage.getItem('ibep_div_selector') || 'ibediv'"
   - "'/ibepower_static/ibepower_logo.png'"
 entities:
   - ${'sensor.' + vars[0] + '_solar_watts'}
@@ -46,6 +49,7 @@ card:
         vars[0] + '_calculated_watts')) || ('sensor.calculated_watts_' +
         vars[0])}
       name: ${('' + vars[0]).toUpperCase()}
+      show_name: false
       show_icon: false
       show_state: false
       show_label: false
@@ -68,8 +72,26 @@ card:
           ]]]
         flow: |
           [[[
-            const base = variables.base;
+            let base = localStorage.getItem('ibep_div_selector') || variables.base;
             const safeStates = (states && typeof states === 'object') ? states : {};
+            const _devReg = (hass && hass.devices) ? hass.devices : {};
+            const _entReg = (hass && hass.entities) ? hass.entities : {};
+            const _divDevIds = new Set(Object.values(_devReg)
+              .filter(d => d.model === 'Ibediv')
+              .map(d => d.id));
+            const _divEntityIds = Object.keys(_entReg)
+              .filter(eid => eid.startsWith('sensor.') && _divDevIds.has(_entReg[eid].device_id));
+            const _allSlugs = [...new Set(_divEntityIds.map(eid => {
+              let m = eid.match(/^sensor\.(.+)_calculated_watts$/);
+              if (m) return m[1];
+              m = eid.match(/^sensor\.calculated_watts_(.+)$/);
+              if (m) return m[1];
+              return null;
+            }).filter(Boolean))].sort();
+            if (_allSlugs.length > 0 && _allSlugs.indexOf(base) === -1) {
+              base = _allSlugs[0];
+              try { localStorage.setItem('ibep_div_selector', base); } catch(ex) {}
+            }
             const invalidState = (state) => {
               const s = String(state ?? '').trim().toLowerCase();
               return !s || s === 'unknown' || s === 'unavailable' || s === 'none' || s === 'null';
@@ -171,7 +193,8 @@ card:
             const hasBatterySoc = hasEntity('battery_soc');
             const hasDiverter = hasEntity('calculated_watts');
 
-            const effectiveLoadW = hasHome ? loadW : (solarW - gridW - batteryW);
+            const loadWValid = hasHome && Number.isFinite(Number(String(getRaw('load_watts') ?? '').replace(',', '.')));
+            const effectiveLoadW = loadWValid ? loadW : (solarW - gridW - batteryW);
             const solarActive = hasSolar && Math.abs(solarW) > 0;
             const gridActive = hasGrid && Math.abs(gridW) > 0;
             const homeActive = Math.abs(effectiveLoadW) > 0;
@@ -230,7 +253,24 @@ card:
             const hasBatt = hasBatteryPower || hasBatterySoc;
             const layoutClass = (!hasBatt && hasGrid) ? ' layout-no-batt' : (hasBatt && !hasGrid) ? ' layout-no-grid' : '';
 
-            const parts = ['<div class="ibep-flow-wrap' + layoutClass + '">'];
+            const parts = [];
+            if (_allSlugs.length > 1) {
+              const _ddOpen = localStorage.getItem('ibep_div_dd_open') === '1';
+              const _ddOpts = _allSlugs.map(s =>
+                '<div class="ibep-dd-option' + (s === base ? ' active' : '') + '" data-ibep-div-val="' + s + '">' +
+                '<span>' + s.replace(/_/g, ' ') + '</span></div>'
+              ).join('');
+              parts.push(
+                '<div class="ibep-dd' + (_ddOpen ? ' open' : '') + '">',
+                  '<div class="ibep-dd-header" data-ibep-toggle-dd-div="1">',
+                    '<span class="ibep-dd-current">', base.replace(/_/g, ' '), '</span>',
+                    '<ha-icon icon="mdi:chevron-down" class="ibep-dd-arrow" style="--mdc-icon-size:20px;color:rgba(255,255,255,0.6);"></ha-icon>',
+                  '</div>',
+                  '<div class="ibep-dd-list">', _ddOpts, '</div>',
+                '</div>'
+              );
+            }
+            parts.push('<div class="ibep-flow-wrap' + layoutClass + '">');
 
             if (hasSolar) parts.push('<div class="ibep-flow-connector ', cSolarCenter, '"></div>');
             if (hasBatteryPower) parts.push('<div class="ibep-flow-connector ', cBatteryCenter, '"></div>');
@@ -307,8 +347,8 @@ card:
 
             parts.push('</div>');
 
-            if (!window._ibepFlowClickHandler) {
-              window._ibepFlowClickHandler = true;
+            if (!window._ibepDivHandlerVer || window._ibepDivHandlerVer < 4) {
+              window._ibepDivHandlerVer = 4;
               let _ibepTouchStart = null;
               const IBEP_TAP_THRESHOLD = 10;
               const ibepDispatch = (e, isTouchEnd) => {
@@ -350,6 +390,52 @@ card:
               }, true);
               document.addEventListener('click', (e) => {
                 const path = e.composedPath();
+                for (var i = 0; i < path.length; i++) {
+                  var el = path[i];
+                  if (!el || !el.getAttribute) continue;
+                  if (el.getAttribute('data-ibep-toggle-dd-div')) {
+                    e.stopImmediatePropagation();
+                    e.preventDefault();
+                    var wasOpen = localStorage.getItem('ibep_div_dd_open') === '1';
+                    localStorage.setItem('ibep_div_dd_open', wasOpen ? '0' : '1');
+                    var dd = null;
+                    for (var x = 0; x < path.length; x++) {
+                      if (path[x].classList && path[x].classList.contains('ibep-dd')) { dd = path[x]; break; }
+                    }
+                    if (dd) { if (wasOpen) dd.classList.remove('open'); else dd.classList.add('open'); }
+                    return;
+                  }
+                  if (el.getAttribute('data-ibep-div-val')) {
+                    e.stopImmediatePropagation();
+                    e.preventDefault();
+                    var selected = el.getAttribute('data-ibep-div-val');
+                    localStorage.setItem('ibep_div_selector', selected);
+                    localStorage.setItem('ibep_div_dd_open', '0');
+                    var dd2 = null;
+                    for (var x2 = 0; x2 < path.length; x2++) {
+                      if (path[x2].classList && path[x2].classList.contains('ibep-dd')) { dd2 = path[x2]; break; }
+                    }
+                    if (dd2) {
+                      dd2.classList.remove('open');
+                      var cur = dd2.querySelector('.ibep-dd-current');
+                      if (cur) cur.textContent = selected.replace(/_/g, ' ');
+                      dd2.querySelectorAll('.ibep-dd-option').forEach(function(o) {
+                        if (o.getAttribute('data-ibep-div-val') === selected) o.classList.add('active');
+                        else o.classList.remove('active');
+                      });
+                    }
+                    // Forzar re-render de la tarjeta para actualizar datos
+                    setTimeout(function() {
+                      for (var j = 0; j < path.length; j++) {
+                        if (path[j] && path[j]._hass) {
+                          path[j].hass = path[j]._hass;
+                          break;
+                        }
+                      }
+                    }, 16);
+                    return;
+                  }
+                }
                 for (const el of path) {
                   if (el.classList && (el.classList.contains('ibep-flow-node') || el.classList.contains('ibep-temp-pill')) && el._ibepTouchHandled && (Date.now() - el._ibepTouchHandled < 800)) return;
                   if (el.classList && (el.classList.contains('ibep-flow-node') || el.classList.contains('ibep-temp-pill'))) { ibepDispatch(e, false); return; }
@@ -372,19 +458,8 @@ card:
               linear-gradient(145deg, rgba(38, 118, 58, 0.92), rgba(52, 148, 74,
               0.90))
           - box-shadow: 0 8px 32px rgba(0, 0, 0, 0.58)
-        name:
-          - justify-self: center
-          - color: "#ffffff"
-          - font-size: 1.35rem
-          - font-weight: 700
-          - letter-spacing: 0.04em
-          - text-transform: uppercase
-          - text-align: center
-          - text-shadow: 0 1px 4px rgba(0,0,0,0.55)
-          - width: 100%
-          - padding: 4px 6px 8px
         grid:
-          - grid-template-areas: "\"logo\" \"n\" \"flow\""
+          - grid-template-areas: "\"logo\" \"flow\""
           - grid-template-columns: 1fr
           - row-gap: 4px
         custom_fields:
@@ -395,15 +470,109 @@ card:
           flow:
             - justify-self: stretch
       extra_styles: |
+        .ibep-dd {
+          position: relative;
+          width: 100%;
+          max-width: 280px;
+          margin: 0 auto 10px;
+          z-index: 1;
+        }
+        .ibep-dd-header {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+          background: rgba(255,255,255,0.12);
+          border: 1px solid rgba(255,255,255,0.25);
+          border-radius: 12px;
+          padding: 8px 14px;
+          cursor: pointer;
+          pointer-events: auto;
+          transition: border-color 0.2s ease, background 0.2s ease;
+          -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
+        }
+        .ibep-dd-header:hover {
+          border-color: rgba(76, 223, 107, 0.7);
+          background: rgba(255,255,255,0.18);
+        }
+        .ibep-dd.open .ibep-dd-header {
+          border-color: rgba(76, 223, 107, 0.7);
+          background: rgba(255,255,255,0.18);
+          border-radius: 12px 12px 0 0;
+        }
+        .ibep-dd-current {
+          font-size: 1.35rem;
+          font-weight: 700;
+          color: #ffffff;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          text-shadow: 0 1px 4px rgba(0,0,0,0.55);
+          text-align: center;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .ibep-dd-arrow {
+          position: absolute;
+          right: 14px;
+          top: 50%;
+          transform: translateY(-50%);
+          transition: transform 0.25s ease;
+        }
+        .ibep-dd.open .ibep-dd-arrow {
+          transform: translateY(-50%) rotate(180deg);
+        }
+        .ibep-dd-list {
+          max-height: 0;
+          overflow: hidden;
+          transition: max-height 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+          background: rgba(20, 35, 20, 0.96);
+          border: none;
+          border-radius: 0 0 12px 12px;
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          box-shadow: none;
+        }
+        .ibep-dd.open .ibep-dd-list {
+          max-height: 300px;
+          border: 1px solid rgba(76, 223, 107, 0.5);
+          border-top: none;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        }
+        .ibep-dd-option {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 14px;
+          font-size: 0.88rem;
+          font-weight: 500;
+          color: rgba(255,255,255,0.8);
+          text-transform: capitalize;
+          cursor: pointer;
+          pointer-events: auto;
+          transition: background 0.15s ease;
+          -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
+        }
+        .ibep-dd-option:hover {
+          background: rgba(76, 223, 107, 0.15);
+          color: #ffffff;
+        }
+        .ibep-dd-option.active {
+          color: #4cdf6b;
+          font-weight: 700;
+          background: rgba(76, 223, 107, 0.08);
+        }
+        .ibep-dd-option:last-child {
+          border-radius: 0 0 12px 12px;
+        }
         .ibep-brand-logo-wrap {
           display: inline-flex;
           align-items: center;
           justify-content: center;
           padding: 5px 9px;
           border-radius: 10px;
-          # background: rgba(255, 255, 255, 0.07);
-          # border: 1px solid rgba(0, 210, 255, 0.28);
-          # box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
         }
         .ibep-brand-logo {
           display: block;
@@ -578,7 +747,7 @@ card:
           --node-main: #1a56b0;
         }
         .node-diverter {
-          z-index: 4;
+          z-index: 2;
           top: 50%;
           left: calc(50% + var(--ox, 0%));
           width: min(122px, 26%);
