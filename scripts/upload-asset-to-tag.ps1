@@ -66,15 +66,8 @@ function Upload-AssetWithApi {
         Invoke-RestMethod -Method Delete -Uri $deleteAssetUri -Headers $apiHeaders | Out-Null
     }
 
-    $uploadUrl = [string]$release.upload_url
-    $uploadUrl = $uploadUrl -replace '\{.*\}$', ''
     $encodedZipFileName = [System.Uri]::EscapeDataString($zipFileName)
-    $uploadUri = "$uploadUrl?name=$encodedZipFileName"
-
-    $isValidUploadUri = [System.Uri]::IsWellFormedUriString($uploadUri, [System.UriKind]::Absolute)
-    if (-not $isValidUploadUri) {
-        throw "GitHub devolvió upload_url no válida: $($release.upload_url)"
-    }
+    $uploadUri = "https://uploads.github.com/repos/$owner/$repo/releases/$($release.id)/assets?name=$encodedZipFileName"
 
     Invoke-RestMethod -Method Post `
         -Uri $uploadUri `
