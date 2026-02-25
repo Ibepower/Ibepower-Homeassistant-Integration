@@ -1,0 +1,67 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "HACS: Build release ZIP",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/build-hacs-zip.ps1"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "HACS: Publish release (auto patch bump)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/publish-release.ps1",
+        "-Bump",
+        "patch"
+      ],
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "HACS: Publish release (auto minor bump)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/publish-release.ps1",
+        "-Bump",
+        "minor"
+      ],
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "HACS: Publish release (auto major bump)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/publish-release.ps1",
+        "-Bump",
+        "major"
+      ],
+      "group": "none",
+      "problemMatcher": []
+    }
+  ]
+}

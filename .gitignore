@@ -5,3 +5,6 @@ __pycache__/
 
 # Temporary compiled artifacts (e.g. cpython-314.pyc.123456789)
 *.pyc.*
+
+# Build artifacts
+dist/
