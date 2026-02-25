@@ -191,6 +191,10 @@ Two release tasks are available in VS Code (`Terminal -> Run Task`):
 4. `HACS: Publish release (auto major bump)`
    - Same flow as publish task but bumps `major`.
 
+5. `HACS: Upload ZIP to existing tag`
+   - Builds the HACS ZIP and uploads/replaces it in an already existing release tag.
+   - Useful when tag exists but the release asset upload failed.
+
 Requirements for publish task:
 - `git` installed and authenticated to push.
 - One of the following:

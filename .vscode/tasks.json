@@ -62,6 +62,20 @@
       ],
       "group": "none",
       "problemMatcher": []
+    },
+    {
+      "label": "HACS: Upload ZIP to existing tag",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/upload-asset-to-tag.ps1"
+      ],
+      "group": "none",
+      "problemMatcher": []
     }
   ]
 }

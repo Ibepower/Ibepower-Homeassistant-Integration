@@ -81,15 +81,23 @@ function Publish-ReleaseWithApi {
         generate_release_notes = $true
     } | ConvertTo-Json
 
+    $createReleaseUri = "https://api.github.com/repos/$owner/$repo/releases"
     $release = Invoke-RestMethod -Method Post `
-        -Uri "https://api.github.com/repos/$owner/$repo/releases" `
+        -Uri $createReleaseUri `
         -Headers $apiHeaders `
         -Body $createReleaseBody `
         -ContentType "application/json"
 
-    $uploadUrl = $release.upload_url -replace '\{\?name,label\}', ''
+    $uploadUrl = [string]$release.upload_url
+    $uploadUrl = $uploadUrl -replace '\{.*\}$', ''
     $zipFileName = Split-Path -Path $ZipPath -Leaf
-    $uploadUri = "$uploadUrl?name=$zipFileName"
+    $encodedZipFileName = [System.Uri]::EscapeDataString($zipFileName)
+    $uploadUri = "$uploadUrl?name=$encodedZipFileName"
+
+    $isValidUploadUri = [System.Uri]::IsWellFormedUriString($uploadUri, [System.UriKind]::Absolute)
+    if (-not $isValidUploadUri) {
+        throw "GitHub devolvió upload_url no válida: $($release.upload_url)"
+    }
 
     Invoke-RestMethod -Method Post `
         -Uri $uploadUri `
@@ -186,18 +194,43 @@ if (-not (Test-Path $zipPath)) {
 
 $tag = "v$newVersion"
 
+$localTagExists = git tag --list $tag
+if ($localTagExists) {
+    throw "La tag $tag ya existe localmente."
+}
+
+$remoteTagExists = git ls-remote --tags origin "refs/tags/$tag"
+if ($remoteTagExists) {
+    throw "La tag $tag ya existe en remoto."
+}
+
 git add $manifestPath
 git commit -m "chore(release): $tag"
-git tag $tag
+$pushedCommit = $false
+$pushedTag = $false
+try {
+    git tag $tag
 
-git push
-git push origin $tag
+    git push
+    $pushedCommit = $true
+    git push origin $tag
+    $pushedTag = $true
 
-if ($ghAvailable) {
-    gh release create $tag $zipPath --title $tag --generate-notes
+    if ($ghAvailable) {
+        gh release create $tag $zipPath --title $tag --generate-notes
+    }
+    else {
+        Publish-ReleaseWithApi -Tag $tag -ZipPath $zipPath -Token $githubToken
+    }
 }
-else {
-    Publish-ReleaseWithApi -Tag $tag -ZipPath $zipPath -Token $githubToken
+catch {
+    if (-not $pushedTag) {
+        git tag -d $tag 2>$null | Out-Null
+    }
+    if (-not $pushedCommit) {
+        git reset --hard HEAD~1
+    }
+    throw
 }
 
 Write-Host "Release publicada: $tag"
