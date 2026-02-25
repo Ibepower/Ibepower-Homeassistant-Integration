@@ -167,7 +167,11 @@ if ($manifestRaw -eq $updatedManifestRaw) {
     throw "No se pudo actualizar el campo version en manifest.json."
 }
 
-Set-Content -Path $manifestPath -Value $updatedManifestRaw -Encoding utf8NoBOM
+[System.IO.File]::WriteAllText(
+    $manifestPath,
+    $updatedManifestRaw,
+    [System.Text.UTF8Encoding]::new($false)
+)
 
 $buildZipScript = Join-Path $PSScriptRoot "build-hacs-zip.ps1"
 & $buildZipScript
