@@ -115,6 +115,44 @@ function Get-TokenFromSecureString {
     }
 }
 
+$tokenStoreDir = Join-Path $env:APPDATA "IbepowerHA"
+$tokenStoreFile = Join-Path $tokenStoreDir "github_token.txt"
+
+function Get-StoredGitHubToken {
+    if (-not (Test-Path $tokenStoreFile)) {
+        return ""
+    }
+
+    try {
+        $encrypted = Get-Content -Path $tokenStoreFile -Raw
+        if ([string]::IsNullOrWhiteSpace($encrypted)) {
+            return ""
+        }
+
+        $secureToken = ConvertTo-SecureString $encrypted
+        return Get-TokenFromSecureString -SecureToken $secureToken
+    }
+    catch {
+        return ""
+    }
+}
+
+function Save-GitHubToken {
+    param([string]$Token)
+
+    if ([string]::IsNullOrWhiteSpace($Token)) {
+        return
+    }
+
+    if (-not (Test-Path $tokenStoreDir)) {
+        New-Item -ItemType Directory -Path $tokenStoreDir -Force | Out-Null
+    }
+
+    $secureToken = ConvertTo-SecureString $Token -AsPlainText -Force
+    $encrypted = ConvertFrom-SecureString $secureToken
+    Set-Content -Path $tokenStoreFile -Value $encrypted -Encoding UTF8
+}
+
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $repoRoot
 
@@ -132,15 +170,21 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
 $ghAvailable = $null -ne (Get-Command gh -ErrorAction SilentlyContinue)
 $githubToken = if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_TOKEN)) { $env:GITHUB_TOKEN } else { $env:GH_TOKEN }
 
+if ([string]::IsNullOrWhiteSpace($githubToken)) {
+    $githubToken = Get-StoredGitHubToken
+}
+
 if (-not $ghAvailable -and [string]::IsNullOrWhiteSpace($githubToken)) {
     Write-Host "No se encontró GitHub CLI (gh) y no hay GITHUB_TOKEN/GH_TOKEN definido."
-    Write-Host "Introduce un token con permisos de repo (contents: write)."
+    Write-Host "Introduce un token con permisos de repo (contents: write). Se guardará cifrado para próximos usos."
     $secureToken = Read-Host "GitHub token" -AsSecureString
     $githubToken = Get-TokenFromSecureString -SecureToken $secureToken
 
     if ([string]::IsNullOrWhiteSpace($githubToken)) {
         throw "No se proporcionó token. Instala gh o define GITHUB_TOKEN/GH_TOKEN."
     }
+
+    Save-GitHubToken -Token $githubToken
 }
 
 $statusBefore = git status --porcelain
