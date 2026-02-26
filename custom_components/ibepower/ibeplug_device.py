@@ -8,6 +8,11 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=10)
 
+
+def _format_error(error: Exception) -> str:
+    message = str(error).strip()
+    return message or error.__class__.__name__
+
 class IBEPlugDevice:
     def __init__(self, hass, host, name, mac, version, description):
         self._hass = hass
@@ -102,7 +107,9 @@ class IBEPlugDevice:
                 return energy_data
 
         except (aiohttp.ClientError, TimeoutError) as error:
-            raise UpdateFailed(f"Error de conexión al dispositivo {self._name}: {error}") from error
+            raise UpdateFailed(
+                f"Error de conexión al dispositivo {self._name}: {_format_error(error)}"
+            ) from error
 
     async def async_turn_on(self):
         return await self._send_command("Power", "1")
@@ -122,7 +129,9 @@ class IBEPlugDevice:
                 _LOGGER.debug(f"Comando {command} enviado con éxito, respuesta: {data}")
                 return data
         except (aiohttp.ClientError, TimeoutError) as error:
-            _LOGGER.error(f"Error de conexión al enviar el comando {command} al dispositivo {self._name}: {error}")
+            _LOGGER.error(
+                f"Error de conexión al enviar el comando {command} al dispositivo {self._name}: {_format_error(error)}"
+            )
             return None
     
     async def reboot(self):

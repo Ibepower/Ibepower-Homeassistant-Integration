@@ -1,6 +1,7 @@
 ﻿import logging
 
 from homeassistant import config_entries
+from homeassistant.config_entries import UnknownEntry
 
 try:
     # HA Core 2026.2+
@@ -93,7 +94,14 @@ class IbepowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     },
                 )
 
-                await self.hass.config_entries.async_reload(existing_entry.entry_id)
+                try:
+                    await self.hass.config_entries.async_reload(existing_entry.entry_id)
+                except UnknownEntry:
+                    _LOGGER.debug(
+                        "Entrada %s ya no existe al intentar recargar tras actualización Zeroconf",
+                        existing_entry.entry_id,
+                    )
+                    return self.async_abort(reason="device_already_configured")
 
                 domain_data = self.hass.data.get(DOMAIN, {})
                 entry_data = domain_data.get(existing_entry.entry_id)
