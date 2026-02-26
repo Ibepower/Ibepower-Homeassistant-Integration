@@ -172,7 +172,7 @@ const IBEP_SHARED_CSS = `
                         radial-gradient(circle at 50% 88%, rgba(140,230,60,0.18), transparent 48%);
   }
   .card {
-    border-radius: 24px;
+    border-radius: var(--ha-card-border-radius, 12px);
     padding: 16px;
     border: 1px solid rgba(120,220,80,0.90);
     background: var(--ibep-bg-overlay), var(--ibep-bg);
@@ -267,7 +267,11 @@ const IBEP_SHARED_CSS = `
 // ---------------------------------------------------------------------------
 // Dropdown helper
 // ---------------------------------------------------------------------------
-function ibepRenderDropdown(slugs, selected, storageKey) {
+function ibepRenderDropdown(slugs, selected, storageKey, configDevice) {
+  // If a specific device is pinned via config, just show the name (no dropdown)
+  if (configDevice && slugs.indexOf(configDevice) !== -1) {
+    return `<div class="device-name">${(configDevice).replace(/_/g, ' ')}</div>`;
+  }
   if (slugs.length <= 1) {
     return `<div class="device-name">${(selected || '').replace(/_/g, ' ')}</div>`;
   }
@@ -319,8 +323,8 @@ function ibepSetupDropdown(shadow, onSelect, card) {
 }
 
 function ibepResolveSlug(slugs, storageKey, configDevice) {
+  // If a device is pinned via config, use it directly without touching localStorage
   if (configDevice && slugs.indexOf(configDevice) !== -1) {
-    localStorage.setItem(storageKey, configDevice);
     return configDevice;
   }
   let base = localStorage.getItem(storageKey);
@@ -477,7 +481,7 @@ class IbepowerIbeplugCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    if (this.isConnected && !this._ddOpen) this._render();
+    if (!this._ddOpen) this._render();
   }
 
   getCardSize() { return 6; }
@@ -488,7 +492,8 @@ class IbepowerIbeplugCard extends HTMLElement {
     const t = ibepI18n(hass);
     const slugs = ibepGetSlugs(hass, 'Ibeplug', 'ibeplug', 'switch');
     if (slugs.length === 0) {
-      this.shadowRoot.innerHTML = `<style>${IBEPLUG_CSS}</style><div class="card"><div class="logo-wrap"><img src="${ibepLogoUrl(hass)}" alt="Ibepower"></div><div class="no-devices">${t.nodev}</div></div>`;
+      this._structKey = '';
+      this.shadowRoot.innerHTML = `<style>${IBEPLUG_CSS}</style><ha-card><div class="card"><div class="logo-wrap"><img src="${ibepLogoUrl(hass)}" alt="Ibepower"></div><div class="no-devices">${t.nodev}</div></div></ha-card>`;
       return;
     }
     const base = ibepResolveSlug(slugs, 'ibep_plug_selector', this._config.device);
@@ -554,48 +559,73 @@ class IbepowerIbeplugCard extends HTMLElement {
     const barPct = this._peakW > 0 ? Math.min(100, Math.round((absPower / this._peakW) * 100)) : 0;
     const barColor = barPct > 75 ? '#e74c3c' : barPct > 40 ? '#f39c12' : '#2ecc71';
 
+    // Incremental update: skip full re-render if structure unchanged
+    const structKey = slugs.join(',') + '|' + base;
+    if (this._structKey === structKey && this.shadowRoot.querySelector('.plug-panel')) {
+      const sr = this.shadowRoot;
+      const q = s => sr.querySelector(s);
+      const toggle = sr.getElementById('toggle');
+      if (toggle) toggle.className = 'plug-toggle ' + (isOn ? 'is-on' : 'is-off');
+      const icon = q('#toggle ha-icon');
+      if (icon) icon.style.color = isOn ? '#4cdf6b' : '#aaa';
+      const setText = (s, txt) => { const e = q(s); if (e) e.textContent = txt; };
+      setText('[data-v="status"]', isOn ? t.on : t.off);
+      setText('[data-v="power"]', powerW !== null ? Math.round(powerW) + ' W' : '-- W');
+      setText('[data-v="peak"]', t.peak + ': ' + (this._peakW > 0 ? Math.round(this._peakW) + ' W' : '-- W'));
+      setText('[data-v="voltage"]', ibepFmt(voltageV, 'V', 1));
+      setText('[data-v="current"]', ibepFmt(currentA, 'A', 2));
+      setText('[data-v="factor"]', ibepFmt(factorPct, '%', 0));
+      setText('[data-v="today"]', ibepFmtK(kwToday));
+      setText('[data-v="yesterday"]', ibepFmtK(kwYesterday));
+      setText('[data-v="total"]', ibepFmtK(kwTotal));
+      const bar = q('[data-v="bar"]');
+      if (bar) { bar.style.width = barPct + '%'; bar.style.background = barColor; }
+      return;
+    }
+    this._structKey = structKey;
+
     this.shadowRoot.innerHTML = `
       <style>${IBEPLUG_CSS}</style>
       <ha-card>
         <div class="card">
           <div class="logo-wrap"><img src="${ibepLogoUrl(hass)}" alt="Ibepower"></div>
-          ${ibepRenderDropdown(slugs, base, 'ibep_plug_selector')}
+          ${ibepRenderDropdown(slugs, base, 'ibep_plug_selector', this._config.device)}
           <div class="plug-panel">
             <div class="plug-toggle ${isOn ? 'is-on' : 'is-off'}" id="toggle">
-              <div class="plug-icon-ring">
+              <div class="plug-icon-ring" style="animation-delay:${-(Date.now() % 2000)}ms">
                 <ha-icon icon="mdi:power-plug" style="--mdc-icon-size:44px; color:${isOn ? '#4cdf6b' : '#aaa'};"></ha-icon>
               </div>
-              <div class="plug-status">${isOn ? t.on : t.off}</div>
+              <div class="plug-status" data-v="status">${isOn ? t.on : t.off}</div>
             </div>
             <div class="power-section">
               <div class="power-label">${t.power}</div>
-              <div class="power-value">${powerW !== null ? Math.round(powerW) + ' W' : '-- W'}</div>
-              <div class="power-peak">${t.peak}: ${this._peakW > 0 ? Math.round(this._peakW) + ' W' : '-- W'}</div>
-              <div class="power-bar-track"><div class="power-bar-fill" style="width:${barPct}%;background:${barColor};"></div></div>
+              <div class="power-value" data-v="power">${powerW !== null ? Math.round(powerW) + ' W' : '-- W'}</div>
+              <div class="power-peak" data-v="peak">${t.peak}: ${this._peakW > 0 ? Math.round(this._peakW) + ' W' : '-- W'}</div>
+              <div class="power-bar-track"><div class="power-bar-fill" data-v="bar" style="width:${barPct}%;background:${barColor};"></div></div>
             </div>
             <div class="plug-metrics">
               <div class="plug-metric">
                 <ha-icon icon="mdi:flash" style="--mdc-icon-size:20px;color:#f1c40f;"></ha-icon>
-                <div class="plug-metric-val">${ibepFmt(voltageV, 'V', 1)}</div>
+                <div class="plug-metric-val" data-v="voltage">${ibepFmt(voltageV, 'V', 1)}</div>
                 <div class="plug-metric-lbl">${t.voltage}</div>
               </div>
               <div class="plug-metric">
                 <ha-icon icon="mdi:current-ac" style="--mdc-icon-size:20px;color:#3498db;"></ha-icon>
-                <div class="plug-metric-val">${ibepFmt(currentA, 'A', 2)}</div>
+                <div class="plug-metric-val" data-v="current">${ibepFmt(currentA, 'A', 2)}</div>
                 <div class="plug-metric-lbl">${t.current}</div>
               </div>
               <div class="plug-metric">
                 <ha-icon icon="mdi:cosine-wave" style="--mdc-icon-size:20px;color:#9b59b6;"></ha-icon>
-                <div class="plug-metric-val">${ibepFmt(factorPct, '%', 0)}</div>
+                <div class="plug-metric-val" data-v="factor">${ibepFmt(factorPct, '%', 0)}</div>
                 <div class="plug-metric-lbl">${t.pf}</div>
               </div>
             </div>
             <div class="plug-energy">
               <div class="plug-energy-title">${t.energy}</div>
               <div class="plug-energy-rows">
-                <div class="plug-energy-row"><span class="plug-energy-lbl">${t.today}</span><span class="plug-energy-val">${ibepFmtK(kwToday)}</span></div>
-                <div class="plug-energy-row"><span class="plug-energy-lbl">${t.yesterday}</span><span class="plug-energy-val">${ibepFmtK(kwYesterday)}</span></div>
-                <div class="plug-energy-row"><span class="plug-energy-lbl">${t.total}</span><span class="plug-energy-val">${ibepFmtK(kwTotal)}</span></div>
+                <div class="plug-energy-row"><span class="plug-energy-lbl">${t.today}</span><span class="plug-energy-val" data-v="today">${ibepFmtK(kwToday)}</span></div>
+                <div class="plug-energy-row"><span class="plug-energy-lbl">${t.yesterday}</span><span class="plug-energy-val" data-v="yesterday">${ibepFmtK(kwYesterday)}</span></div>
+                <div class="plug-energy-row"><span class="plug-energy-lbl">${t.total}</span><span class="plug-energy-val" data-v="total">${ibepFmtK(kwTotal)}</span></div>
               </div>
             </div>
           </div>
@@ -695,7 +725,7 @@ const IBEMETER_CSS = `
     box-shadow: 0 2px 9px rgba(0, 0, 0, 0.25);
     cursor: pointer;
   }
-  .ibep-flow-node.node-active { opacity: 1; animation: nodeFlash 1.8s ease-in-out 1; }
+  .ibep-flow-node.node-active { opacity: 1; animation: nodeGlow 3s ease-in-out infinite; }
   .ibep-flow-node.node-idle   { opacity: 0.92; }
   .node-solar { top: 20%; left: 20%; --node-accent: #d8b548; --node-main: #8a6d00; }
   .node-grid  { top: 20%; left: 80%; --node-accent: #8660ce; --node-main: #5a3d9e; }
@@ -728,7 +758,7 @@ const IBEMETER_CSS = `
   @keyframes flowLeft  { 0%{background-position:0 0} 100%{background-position:-24px 0} }
   @keyframes flowDown  { 0%{background-position:0 0} 100%{background-position:0 24px} }
   @keyframes pipeGlow  { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.2)} }
-  @keyframes nodeFlash { 0%,100%{box-shadow:0 2px 9px rgba(0,0,0,0.25)} 50%{box-shadow:0 2px 9px rgba(0,0,0,0.25),0 0 16px var(--node-accent,rgba(120,132,152,0.45))} }
+  @keyframes nodeGlow { 0%,100%{box-shadow:0 2px 9px rgba(0,0,0,0.25), 0 0 6px var(--node-accent,rgba(120,132,152,0.15))} 50%{box-shadow:0 2px 9px rgba(0,0,0,0.25),0 0 16px var(--node-accent,rgba(120,132,152,0.45))} }
   /* ---- Responsive ---- */
   @media (max-width: 540px) {
     .flow-viewport { width: 100%; min-height: 0; }
@@ -779,7 +809,7 @@ class IbepowerIbemeterCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    if (this.isConnected && !this._ddOpen) this._render();
+    if (!this._ddOpen) this._render();
   }
 
   getCardSize() { return 5; }
@@ -791,7 +821,8 @@ class IbepowerIbemeterCard extends HTMLElement {
     const t = ibepI18n(hass);
     const slugs = ibepGetSlugs(hass, 'Ibemeter', 'grid_voltage', 'sensor');
     if (slugs.length === 0) {
-      this.shadowRoot.innerHTML = `<style>${IBEMETER_CSS}</style><div class="card"><div class="logo-wrap"><img src="${ibepLogoUrl(hass)}" alt="Ibepower"></div><div class="no-devices">${t.nodev}</div></div>`;
+      this._structKey = '';
+      this.shadowRoot.innerHTML = `<style>${IBEMETER_CSS}</style><ha-card><div class="card"><div class="logo-wrap"><img src="${ibepLogoUrl(hass)}" alt="Ibepower"></div><div class="no-devices">${t.nodev}</div></div></ha-card>`;
       return;
     }
     const base = ibepResolveSlug(slugs, 'ibep_meter_selector', this._config.device);
@@ -841,46 +872,88 @@ class IbepowerIbemeterCard extends HTMLElement {
     const solarEid = ibepState(hass, base, 'solar_watts')?.entity_id || '';
     const gridEid  = ibepState(hass, base, 'grid_watts')?.entity_id || '';
 
+    // ---- Animation delays (keep animations phase-continuous across re-renders) ----
+    const _now = Date.now();
+    const _fdel = -(_now % 1050) + 'ms';
+    const _gdel = -(_now % 1900) + 'ms';
+    const _ndel = -(_now % 3000) + 'ms';
+    const _cDel = `animation-delay:${_fdel},${_gdel}`;
+    const _nDel = `animation-delay:${_ndel}`;
+
     // ---- Connector classes ----
     const cSolarGrid = 'link-solar-grid ' + (solarActive && (gridW ?? 0) > 0 ? 'is-active flow-right' : 'is-idle');
     const cSolarHome = 'link-solar-home ' + (solarActive && (homeW ?? 0) > 0 ? 'is-active flow-right' : 'is-idle');
     const cGridHome  = 'link-grid-home '  + (gridActive && (gridW ?? 0) < 0 ? 'is-active flow-right' : 'is-idle');
 
+    // Incremental update: skip full re-render if structure unchanged
+    const structKey = slugs.join(',') + '|' + base + '|' + hasSolar + '|' + hasGrid + '|' + compact + '|' + hasSolarToday + '|' + hasImportToday + '|' + hasExportToday;
+    if (this._structKey === structKey && this.shadowRoot.querySelector('.flow-wrap')) {
+      const sr = this.shadowRoot;
+      const q = s => sr.querySelector(s);
+      const patchNode = (sel, active, mainText, mainNeg) => {
+        const node = q(sel);
+        if (!node) return;
+        node.classList.toggle('node-active', active);
+        node.classList.toggle('node-idle', !active);
+        const main = node.querySelector('.node-main');
+        if (main) {
+          main.textContent = mainText;
+          if (mainNeg !== undefined) main.classList.toggle('is-negative', mainNeg);
+        }
+      };
+      patchNode('.node-solar', solarActive, solarMain);
+      patchNode('.node-grid', gridActive, gridMain, (gridW ?? 0) < 0);
+      patchNode('.node-home', homeActive, homeMain);
+      const setText = (s, txt) => { const e = q(s); if (e) e.textContent = txt; };
+      setText('[data-v="solar-today"]', ibepFmtK(solarK));
+      setText('[data-v="grid-dir"]', gridDirText || '--');
+      setText('[data-v="import-today"]', t.imp + '. ' + ibepFmtK(importK));
+      setText('[data-v="export-today"]', t.exp + '. ' + ibepFmtK(exportK));
+      setText('[data-v="grid-vc"]', gridVCText);
+      setText('[data-v="grid-f"]', gridFText);
+      const patchConn = (id, cls) => { const e = q('[data-conn="' + id + '"]'); if (e) e.className = 'ibep-flow-connector ' + cls; };
+      patchConn('solar-grid', cSolarGrid);
+      patchConn('solar-home', cSolarHome);
+      patchConn('grid-home', cGridHome);
+      return;
+    }
+    this._structKey = structKey;
+
     // ---- Build connectors HTML ----
     let connectorsHtml = '';
-    if (hasSolar && hasGrid) connectorsHtml += `<div class="ibep-flow-connector ${cSolarGrid}"></div>`;
-    if (hasSolar)            connectorsHtml += `<div class="ibep-flow-connector ${cSolarHome}"></div>`;
-    if (hasGrid)             connectorsHtml += `<div class="ibep-flow-connector ${cGridHome}"></div>`;
+    if (hasSolar && hasGrid) connectorsHtml += `<div class="ibep-flow-connector ${cSolarGrid}" data-conn="solar-grid" style="${_cDel}"></div>`;
+    if (hasSolar)            connectorsHtml += `<div class="ibep-flow-connector ${cSolarHome}" data-conn="solar-home" style="${_cDel}"></div>`;
+    if (hasGrid)             connectorsHtml += `<div class="ibep-flow-connector ${cGridHome}" data-conn="grid-home" style="${_cDel}"></div>`;
 
     // ---- Build nodes HTML ----
     let nodesHtml = '';
     if (hasSolar) {
       nodesHtml += `
-        <div class="ibep-flow-node node-solar ${solarActive ? 'node-active' : 'node-idle'}" data-entity="${solarEid}">
+        <div class="ibep-flow-node node-solar ${solarActive ? 'node-active' : 'node-idle'}" data-entity="${solarEid}" style="${_nDel}">
           <ha-icon class="node-icon" icon="mdi:solar-power"></ha-icon>
           <div class="node-main">${solarMain}</div>
-          ${hasSolarToday && !compact ? `<div class="node-sub">${ibepFmtK(solarK)}</div>` : ''}
+          ${hasSolarToday && !compact ? `<div class="node-sub" data-v="solar-today">${ibepFmtK(solarK)}</div>` : ''}
         </div>`;
     }
     if (hasGrid) {
       nodesHtml += `
-        <div class="ibep-flow-node node-grid ${gridActive ? 'node-active' : 'node-idle'}" data-entity="${gridEid}">
+        <div class="ibep-flow-node node-grid ${gridActive ? 'node-active' : 'node-idle'}" data-entity="${gridEid}" style="${_nDel}">
           <ha-icon class="node-icon" icon="mdi:transmission-tower"></ha-icon>
           <div class="node-main ${(gridW ?? 0) < 0 ? 'is-negative' : ''}">${gridMain}</div>
           <div class="node-sub">
-            <span class="node-sub-line node-sub-title">${gridDirText || '--'}</span>
-            ${hasImportToday && !compact ? `<span class="node-sub-line">${t.imp}. ${ibepFmtK(importK)}</span>` : ''}
-            ${hasExportToday && !compact ? `<span class="node-sub-line">${t.exp}. ${ibepFmtK(exportK)}</span>` : ''}
+            <span class="node-sub-line node-sub-title" data-v="grid-dir">${gridDirText || '--'}</span>
+            ${hasImportToday && !compact ? `<span class="node-sub-line" data-v="import-today">${t.imp}. ${ibepFmtK(importK)}</span>` : ''}
+            ${hasExportToday && !compact ? `<span class="node-sub-line" data-v="export-today">${t.exp}. ${ibepFmtK(exportK)}</span>` : ''}
           </div>
         </div>`;
     }
     nodesHtml += `
-      <div class="ibep-flow-node node-home ${homeActive ? 'node-active' : 'node-idle'}" data-entity="${gridEid}">
+      <div class="ibep-flow-node node-home ${homeActive ? 'node-active' : 'node-idle'}" data-entity="${gridEid}" style="${_nDel}">
         <ha-icon class="node-icon" icon="mdi:home-outline"></ha-icon>
         <div class="node-main">${homeMain}</div>
         <div class="node-sub">
-          <span class="node-sub-line">${gridVCText}</span>
-          ${compact ? '' : `<span class="node-sub-line">${gridFText}</span>`}
+          <span class="node-sub-line" data-v="grid-vc">${gridVCText}</span>
+          ${compact ? '' : `<span class="node-sub-line" data-v="grid-f">${gridFText}</span>`}
         </div>
       </div>`;
 
@@ -890,7 +963,7 @@ class IbepowerIbemeterCard extends HTMLElement {
       <ha-card>
         <div class="card${compact ? ' compact' : ''}">
           <div class="logo-wrap"><img src="${ibepLogoUrl(hass)}" alt="Ibepower"></div>
-          ${ibepRenderDropdown(slugs, base, 'ibep_meter_selector')}
+          ${ibepRenderDropdown(slugs, base, 'ibep_meter_selector', this._config.device)}
           <div class="flow-viewport">
             <div class="flow-wrap">
               ${connectorsHtml}
@@ -995,7 +1068,7 @@ const IBEDIV_CSS = `
     box-shadow: 0 2px 9px rgba(0,0,0,0.25);
     cursor: pointer;
   }
-  .ibep-flow-node.node-active { opacity: 1; animation: nodeFlash 1.8s ease-in-out 1; }
+  .ibep-flow-node.node-active { opacity: 1; animation: nodeGlow 3s ease-in-out infinite; }
   .ibep-flow-node.node-idle   { opacity: 0.92; }
   .node-solar    { top: 17%; left: calc(50% + var(--ox)); --node-accent: #d8b548; --node-main: #8a6d00; }
   .node-battery  { top: 50%; left: calc(17% + var(--ox)); --node-accent: #41aa56; --node-main: #1e7a34; }
@@ -1006,7 +1079,7 @@ const IBEDIV_CSS = `
     width: min(122px, 26%); height: min(122px, 26%);
     --node-accent: #7a8ea0; --node-main: #4a5568;
   }
-  .node-diverter.node-active { animation: nodeFlash 1.8s ease-in-out 1; }
+  .node-diverter.node-active { animation: nodeGlow 3s ease-in-out infinite; }
   .node-icon { color: var(--node-accent, #7e8aa0); --mdc-icon-size: 26px; margin: 0; align-self: center; justify-self: center; }
   .node-icon-rotated { transform: rotate(90deg); }
   .node-main {
@@ -1035,7 +1108,7 @@ const IBEDIV_CSS = `
   @keyframes flowDown  { 0%{background-position:0 0} 100%{background-position:0 24px} }
   @keyframes flowUp    { 0%{background-position:0 0} 100%{background-position:0 -24px} }
   @keyframes pipeGlow  { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.2)} }
-  @keyframes nodeFlash { 0%,100%{box-shadow:0 2px 9px rgba(0,0,0,0.25)} 50%{box-shadow:0 2px 9px rgba(0,0,0,0.25),0 0 16px var(--node-accent,rgba(120,132,152,0.45))} }
+  @keyframes nodeGlow { 0%,100%{box-shadow:0 2px 9px rgba(0,0,0,0.25), 0 0 6px var(--node-accent,rgba(120,132,152,0.15))} 50%{box-shadow:0 2px 9px rgba(0,0,0,0.25),0 0 16px var(--node-accent,rgba(120,132,152,0.45))} }
 
   /* ---- PV strings section ---- */
   .pv-section {
@@ -1211,6 +1284,9 @@ class IbepowerIbedivCard extends HTMLElement {
     this._config = {};
     this._hass = null;
     this._ddOpen = false;
+    this._sliderActive = false;
+    this._sliderReleasedAt = 0;
+    this._sliderDocCleanup = null;
   }
 
   setConfig(config) {
@@ -1228,7 +1304,18 @@ class IbepowerIbedivCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    if (this.isConnected && !this._ddOpen) this._render();
+    if (!this._ddOpen && !this._sliderActive) this._render();
+  }
+
+  _isSliderBusy() {
+    return this._sliderActive || (this._sliderReleasedAt > 0 && (Date.now() - this._sliderReleasedAt) < 3000);
+  }
+
+  disconnectedCallback() {
+    if (this._sliderDocCleanup) {
+      this._sliderDocCleanup();
+      this._sliderDocCleanup = null;
+    }
   }
 
   getCardSize() { return 9; }
@@ -1298,6 +1385,7 @@ class IbepowerIbedivCard extends HTMLElement {
     const slugs = ibepGetSlugs(hass, 'Ibediv', 'calculated_watts', 'sensor');
 
     if (slugs.length === 0) {
+      this._structKey = '';
       this.shadowRoot.innerHTML = `<style>${IBEDIV_CSS}</style><ha-card><div class="card"><div class="logo-wrap"><img src="${ibepLogoUrl(hass)}" alt="Ibepower"></div><div class="no-devices">${t.nodev}</div></div></ha-card>`;
       return;
     }
@@ -1409,7 +1497,7 @@ class IbepowerIbedivCard extends HTMLElement {
         const v = ibepNum(obj);
         const txt = v !== null ? v.toFixed(digits) : '--';
         const eid = obj.entity_id || '';
-        return `<span class="pv-metric" data-entity="${eid}"><span class="pv-val">${txt}</span><span class="pv-key">${unit}</span></span>`;
+        return `<span class="pv-metric" data-entity="${eid}"><span class="pv-val" data-v="${key}-${unit.toLowerCase()}">${txt}</span><span class="pv-key">${unit}</span></span>`;
       };
       const metrics = [metric(vObj,1,'V'), metric(aObj,1,'A'), metric(wObj,0,'W')].filter(Boolean);
       if (!metrics.length) return '';
@@ -1442,56 +1530,11 @@ class IbepowerIbedivCard extends HTMLElement {
       const obj = ibepState(hass, base, d.key);
       if (!ibepValid(obj)) continue;
       const eid = obj.entity_id || '';
-      tempPills.push(`<div class="temp-pill" data-entity="${eid}"><span class="temp-title">${d.label}</span><span class="temp-val">${fmtTemp(obj)}</span></div>`);
+      tempPills.push(`<div class="temp-pill" data-entity="${eid}"><span class="temp-title">${d.label}</span><span class="temp-val" data-v="temp-${d.key}">${fmtTemp(obj)}</span></div>`);
     }
     const hasTemps = tempPills.length > 0;
 
-    // ---- Build connectors HTML ----
-    let connectorsHtml = '';
-    if (hasSolar)        connectorsHtml += `<div class="ibep-flow-connector ${cSolarCenter}"></div>`;
-    if (hasBatteryPower) connectorsHtml += `<div class="ibep-flow-connector ${cBatteryCenter}"></div>`;
-    if (hasGrid)         connectorsHtml += `<div class="ibep-flow-connector ${cGridCenter}"></div>`;
-    connectorsHtml += `<div class="ibep-flow-connector ${cHomeCenter}"></div>`;
-    if (hasSolar && hasBatteryPower) connectorsHtml += `<div class="ibep-flow-connector ${cSolarBattery}"></div>`;
-    if (hasSolar && hasGrid)         connectorsHtml += `<div class="ibep-flow-connector ${cSolarGrid}"></div>`;
-    if (hasBatteryPower) connectorsHtml += `<div class="ibep-flow-connector ${cBatteryHome}"></div>`;
-    if (hasGrid)         connectorsHtml += `<div class="ibep-flow-connector ${cGridHome}"></div>`;
-
-    // ---- Build nodes HTML ----
-    let nodesHtml = '';
-    if (hasSolar) {
-      nodesHtml += `
-        <div class="ibep-flow-node node-solar ${solarActive?'node-active':'node-idle'}" data-entity="${solarEid}">
-          <ha-icon class="node-icon" icon="mdi:solar-power"></ha-icon>
-          <div class="node-main">${fmtAbsW(solarW)}</div>
-          ${hasSolarToday && !compact ? `<div class="node-sub">${ibepFmtK(solarK)}</div>` : ''}
-        </div>`;
-    }
-    if (hasBatt) {
-      nodesHtml += `
-        <div class="ibep-flow-node node-battery ${batteryActive?'node-active':'node-idle'}" data-entity="${batteryEid}">
-          <ha-icon class="node-icon node-icon-rotated" icon="${battIcon}" style="color:${battColor};"></ha-icon>
-          ${hasBatteryPower ? `<div class="node-main ${(batteryW??0)<0?'is-negative':''}">${fmtSignW(batteryW)}</div>` : ''}
-          <div class="node-sub">
-            ${compact
-              ? (batterySocText ? `<span class="node-sub-line node-soc">${batterySocText}</span>` : '')
-              : (batteryDirText ? `<span class="node-sub-line node-sub-title">${batteryDirText}</span>` : '') + (batterySocText ? `<span class="node-sub-line node-soc">${batterySocText}</span>` : '')}
-          </div>
-        </div>`;
-    }
-    if (hasGrid) {
-      nodesHtml += `
-        <div class="ibep-flow-node node-grid ${gridActive?'node-active':'node-idle'}" data-entity="${gridEid}">
-          <ha-icon class="node-icon" icon="mdi:transmission-tower"></ha-icon>
-          <div class="node-main ${(gridW??0)<0?'is-negative':''}">${fmtSignW(gridW)}</div>
-          <div class="node-sub">
-            <span class="node-sub-line node-sub-title">${gridDirText || '--'}</span>
-            ${hasImportToday && !compact ? `<span class="node-sub-line">${t.imp}. ${ibepFmtK(importK)}</span>` : ''}
-            ${hasExportToday && !compact ? `<span class="node-sub-line">${t.exp}. ${ibepFmtK(exportK)}</span>` : ''}
-          </div>
-        </div>`;
-    }
-    // Home node
+    // ---- Home sub HTML (needed by both patch and full render) ----
     let homeSubHtml = '';
     if (hasDiverter) {
       if (!compact) homeSubHtml += `<span class="node-sub-line node-sub-title">${t.diverter}</span>`;
@@ -1502,8 +1545,153 @@ class IbepowerIbedivCard extends HTMLElement {
       homeSubHtml += `<span class="node-sub-line node-sub-spaced node-sub-title">${t.diverterToday}</span>`;
       homeSubHtml += `<span class="node-sub-line">${ibepFmtK(diverterK)}</span>`;
     }
+
+    // ---- Mode button classes ----
+    let modeClass = 'ctrl-mode-disabled';
+    if (managerOn && modeObj) {
+      modeClass = isManual ? 'ctrl-mode-manual' : 'ctrl-mode-auto';
+    }
+
+    // ---- Incremental update: skip full re-render if structure unchanged ----
+    const tempKeysStr = tempDefs.filter(d => ibepValid(ibepState(hass, base, d.key))).map(d => d.key).join(',');
+    const pvSig = ['pv1','pv2'].map(k => [ibepValid(ibepState(hass,base,k+'_voltage')),ibepValid(ibepState(hass,base,k+'_current')),ibepValid(ibepState(hass,base,k+'_power'))].join('')).join('|');
+    const structKey = [slugs.join(','),base,hasSolar,hasGrid,hasBatt,hasBatteryPower,hasBatterySoc,hasDiverter,hasPwm,compact,isManual,!!pwmSetEid,!!modeObj,hasAnyInverter,hasSolarToday,hasImportToday,hasExportToday,hasDiverterToday,hasHome,managerOn,layoutClass,tempKeysStr,pvSig].join('|');
+    if (this._structKey === structKey && this.shadowRoot.querySelector('.flow-wrap')) {
+      const sr = this.shadowRoot;
+      const q = s => sr.querySelector(s);
+      // Nodes
+      const patchNode = (sel, active, mainText, mainNeg) => {
+        const node = q(sel);
+        if (!node) return;
+        node.classList.toggle('node-active', active);
+        node.classList.toggle('node-idle', !active);
+        const m = node.querySelector('.node-main');
+        if (m) { m.textContent = mainText; if (mainNeg !== undefined) m.classList.toggle('is-negative', mainNeg); }
+      };
+      patchNode('.node-solar', solarActive, fmtAbsW(solarW));
+      patchNode('.node-grid', gridActive, fmtSignW(gridW), (gridW ?? 0) < 0);
+      patchNode('.node-home', homeActive, fmtAbsW(effectiveLoadW));
+      patchNode('.node-diverter', inverterActive, fmtAbsW(inverterW));
+      // Battery node
+      const battNode = q('.node-battery');
+      if (battNode) {
+        battNode.classList.toggle('node-active', batteryActive);
+        battNode.classList.toggle('node-idle', !batteryActive);
+        const bm = battNode.querySelector('.node-main');
+        if (bm) { bm.textContent = fmtSignW(batteryW); bm.classList.toggle('is-negative', (batteryW ?? 0) < 0); }
+        const bi = battNode.querySelector('.node-icon');
+        if (bi) { bi.setAttribute('icon', battIcon); bi.style.color = battColor; }
+        const setText2 = (s, txt) => { const e = battNode.querySelector(s); if (e) e.textContent = txt; };
+        setText2('[data-v="batt-dir"]', batteryDirText);
+        setText2('[data-v="batt-soc"]', batterySocText);
+      }
+      // Grid sub text
+      const setText = (s, txt) => { const e = q(s); if (e) e.textContent = txt; };
+      setText('.node-grid [data-v="grid-dir"]', gridDirText || '--');
+      setText('[data-v="div-import-today"]', t.imp + '. ' + ibepFmtK(importK));
+      setText('[data-v="div-export-today"]', t.exp + '. ' + ibepFmtK(exportK));
+      // Solar today
+      const solarSub = q('.node-solar .node-sub');
+      if (solarSub && hasSolarToday && !compact) solarSub.textContent = ibepFmtK(solarK);
+      // Home sub (small innerHTML, won't cause reflow)
+      const homeSub = q('.node-home .node-sub');
+      if (homeSub) homeSub.innerHTML = homeSubHtml;
+      // Connectors
+      const patchConn = (id, cls) => { const e = q('[data-conn="' + id + '"]'); if (e) e.className = 'ibep-flow-connector ' + cls; };
+      patchConn('solar-center', cSolarCenter);
+      patchConn('battery-center', cBatteryCenter);
+      patchConn('grid-center', cGridCenter);
+      patchConn('home-center', cHomeCenter);
+      patchConn('solar-battery', cSolarBattery);
+      patchConn('solar-grid', cSolarGrid);
+      patchConn('battery-home', cBatteryHome);
+      patchConn('grid-home', cGridHome);
+      // PV values
+      ['pv1','pv2'].forEach(k => {
+        const fMap = {v:['voltage',1],a:['current',1],w:['power',0]};
+        Object.entries(fMap).forEach(([u,[field,digits]]) => {
+          const el = q(`[data-v="${k}-${u}"]`);
+          if (el) { const obj = ibepState(hass,base,k+'_'+field); el.textContent = ibepValid(obj) ? (ibepNum(obj)?.toFixed(digits) ?? '--') : '--'; }
+        });
+      });
+      // Temperature values
+      tempDefs.forEach(d => {
+        const el = q(`[data-v="temp-${d.key}"]`);
+        if (el) { const obj = ibepState(hass, base, d.key); el.textContent = fmtTemp(obj); }
+      });
+      // Controls
+      const mgr = sr.getElementById('manager-toggle');
+      if (mgr) { mgr.className = 'ctrl-card ' + (managerOn ? 'ctrl-manager-on' : 'ctrl-manager-off'); const s = mgr.querySelector('.ctrl-state'); if (s) s.textContent = managerOn ? t.on : t.off; }
+      const mode = sr.getElementById('mode-toggle');
+      if (mode) { mode.className = 'ctrl-card ' + modeClass; const s = mode.querySelector('.ctrl-state'); if (s) s.textContent = isManual ? t.manual : t.auto; }
+      // PWM slider (skip if user is dragging or just released)
+      if (!this._isSliderBusy()) {
+        const sl = sr.getElementById('pwm-slider');
+        const dp = sr.getElementById('pwm-display');
+        if (sl) { sl.value = pwmSetVal; sl.disabled = !managerOn; }
+        if (dp) dp.textContent = pwmSetVal + '%';
+        const sw = sl?.parentElement;
+        if (sw) { sw.style.setProperty('--ibep-pct', pwmSetVal + '%'); sw.classList.toggle('is-disabled', !managerOn); }
+      }
+      return;
+    }
+    this._structKey = structKey;
+
+    // ---- Animation delays (keep animations phase-continuous across re-renders) ----
+    const _now = Date.now();
+    const _fdel = -(_now % 1050) + 'ms';
+    const _gdel = -(_now % 1900) + 'ms';
+    const _ndel = -(_now % 3000) + 'ms';
+    const _cDel = `animation-delay:${_fdel},${_gdel}`;
+    const _nDel = `animation-delay:${_ndel}`;
+
+    // ---- Build connectors HTML ----
+    let connectorsHtml = '';
+    if (hasSolar)        connectorsHtml += `<div class="ibep-flow-connector ${cSolarCenter}" data-conn="solar-center" style="${_cDel}"></div>`;
+    if (hasBatteryPower) connectorsHtml += `<div class="ibep-flow-connector ${cBatteryCenter}" data-conn="battery-center" style="${_cDel}"></div>`;
+    if (hasGrid)         connectorsHtml += `<div class="ibep-flow-connector ${cGridCenter}" data-conn="grid-center" style="${_cDel}"></div>`;
+    connectorsHtml += `<div class="ibep-flow-connector ${cHomeCenter}" data-conn="home-center" style="${_cDel}"></div>`;
+    if (hasSolar && hasBatteryPower) connectorsHtml += `<div class="ibep-flow-connector ${cSolarBattery}" data-conn="solar-battery" style="${_cDel}"></div>`;
+    if (hasSolar && hasGrid)         connectorsHtml += `<div class="ibep-flow-connector ${cSolarGrid}" data-conn="solar-grid" style="${_cDel}"></div>`;
+    if (hasBatteryPower) connectorsHtml += `<div class="ibep-flow-connector ${cBatteryHome}" data-conn="battery-home" style="${_cDel}"></div>`;
+    if (hasGrid)         connectorsHtml += `<div class="ibep-flow-connector ${cGridHome}" data-conn="grid-home" style="${_cDel}"></div>`;
+
+    // ---- Build nodes HTML ----
+    let nodesHtml = '';
+    if (hasSolar) {
+      nodesHtml += `
+        <div class="ibep-flow-node node-solar ${solarActive?'node-active':'node-idle'}" data-entity="${solarEid}" style="${_nDel}">
+          <ha-icon class="node-icon" icon="mdi:solar-power"></ha-icon>
+          <div class="node-main">${fmtAbsW(solarW)}</div>
+          ${hasSolarToday && !compact ? `<div class="node-sub">${ibepFmtK(solarK)}</div>` : ''}
+        </div>`;
+    }
+    if (hasBatt) {
+      nodesHtml += `
+        <div class="ibep-flow-node node-battery ${batteryActive?'node-active':'node-idle'}" data-entity="${batteryEid}" style="${_nDel}">
+          <ha-icon class="node-icon node-icon-rotated" icon="${battIcon}" style="color:${battColor};"></ha-icon>
+          ${hasBatteryPower ? `<div class="node-main ${(batteryW??0)<0?'is-negative':''}">${fmtSignW(batteryW)}</div>` : ''}
+          <div class="node-sub">
+            ${compact
+              ? (batterySocText ? `<span class="node-sub-line node-soc" data-v="batt-soc">${batterySocText}</span>` : '')
+              : (batteryDirText ? `<span class="node-sub-line node-sub-title" data-v="batt-dir">${batteryDirText}</span>` : '') + (batterySocText ? `<span class="node-sub-line node-soc" data-v="batt-soc">${batterySocText}</span>` : '')}
+          </div>
+        </div>`;
+    }
+    if (hasGrid) {
+      nodesHtml += `
+        <div class="ibep-flow-node node-grid ${gridActive?'node-active':'node-idle'}" data-entity="${gridEid}" style="${_nDel}">
+          <ha-icon class="node-icon" icon="mdi:transmission-tower"></ha-icon>
+          <div class="node-main ${(gridW??0)<0?'is-negative':''}">${fmtSignW(gridW)}</div>
+          <div class="node-sub">
+            <span class="node-sub-line node-sub-title" data-v="grid-dir">${gridDirText || '--'}</span>
+            ${hasImportToday && !compact ? `<span class="node-sub-line" data-v="div-import-today">${t.imp}. ${ibepFmtK(importK)}</span>` : ''}
+            ${hasExportToday && !compact ? `<span class="node-sub-line" data-v="div-export-today">${t.exp}. ${ibepFmtK(exportK)}</span>` : ''}
+          </div>
+        </div>`;
+    }
     nodesHtml += `
-      <div class="ibep-flow-node node-home ${homeActive?'node-active':'node-idle'}" data-entity="${homeEid}">
+      <div class="ibep-flow-node node-home ${homeActive?'node-active':'node-idle'}" data-entity="${homeEid}" style="${_nDel}">
         <ha-icon class="node-icon" icon="mdi:home-outline"></ha-icon>
         <div class="node-main">${fmtAbsW(effectiveLoadW)}</div>
         <div class="node-sub">${homeSubHtml}</div>
@@ -1512,17 +1700,11 @@ class IbepowerIbedivCard extends HTMLElement {
     // Inverter center node
     if (hasAnyInverter) {
       nodesHtml += `
-        <div class="ibep-flow-node node-diverter ${inverterActive?'node-active':'node-idle'}" data-entity="${inverterEid}">
+        <div class="ibep-flow-node node-diverter ${inverterActive?'node-active':'node-idle'}" data-entity="${inverterEid}" style="${_nDel}">
           <ha-icon class="node-icon" icon="mdi:lightning-bolt"></ha-icon>
           <div class="node-sub node-sub-top">${compact ? '' : t.inverter}</div>
           <div class="node-main">${fmtAbsW(inverterW)}</div>
         </div>`;
-    }
-
-    // ---- Mode button classes ----
-    let modeClass = 'ctrl-mode-disabled';
-    if (managerOn && modeObj) {
-      modeClass = isManual ? 'ctrl-mode-manual' : 'ctrl-mode-auto';
     }
 
     // ---- Full render ----
@@ -1531,7 +1713,7 @@ class IbepowerIbedivCard extends HTMLElement {
       <ha-card>
         <div class="card${compact ? ' compact' : ''}">
           <div class="logo-wrap"><img src="${ibepLogoUrl(hass)}" alt="Ibepower"></div>
-          ${ibepRenderDropdown(slugs, base, 'ibep_div_selector')}
+          ${ibepRenderDropdown(slugs, base, 'ibep_div_selector', this._config.device)}
 
           <!-- Diamond flow -->
           <div class="flow-wrap${layoutClass}">
@@ -1604,6 +1786,25 @@ class IbepowerIbedivCard extends HTMLElement {
     const display = this.shadowRoot.getElementById('pwm-display');
     const sliderWrap = slider?.parentElement;
     if (slider) {
+      const markActive = () => { this._sliderActive = true; };
+      slider.addEventListener('pointerdown', markActive);
+      slider.addEventListener('touchstart', markActive, { passive: true });
+      // Release listener on document so we catch releases outside the card
+      if (this._sliderDocCleanup) this._sliderDocCleanup();
+      const markInactive = () => {
+        if (this._sliderActive) {
+          this._sliderActive = false;
+          this._sliderReleasedAt = Date.now();
+        }
+      };
+      document.addEventListener('pointerup', markInactive);
+      document.addEventListener('touchend', markInactive);
+      document.addEventListener('pointercancel', markInactive);
+      this._sliderDocCleanup = () => {
+        document.removeEventListener('pointerup', markInactive);
+        document.removeEventListener('touchend', markInactive);
+        document.removeEventListener('pointercancel', markInactive);
+      };
       slider.addEventListener('input', () => {
         const pct = Math.max(0, Math.min(100, Number(slider.value) || 0));
         if (display) display.textContent = pct + '%';
@@ -1630,24 +1831,26 @@ class IbepowerCardEditor extends HTMLElement {
     this.attachShadow({ mode: 'open' });
     this._config = {};
     this._hass = null;
+    this._lastSlugsKey = '';
   }
 
   set hass(hass) {
     this._hass = hass;
-    this._render();
+    // Only re-render if the device list actually changed (avoid destroying the <select> while open)
+    const slugsKey = this._computeSlugsKey(hass);
+    if (slugsKey !== this._lastSlugsKey) {
+      this._lastSlugsKey = slugsKey;
+      this._render();
+    }
   }
 
   setConfig(config) {
     this._config = { ...config };
+    this._lastSlugsKey = '';
     if (this._hass) this._render();
   }
 
-  _render() {
-    const hass = this._hass;
-    if (!hass) return;
-    const t = ibepI18n(hass);
-
-    // Avoid showing wrong device list before HA passes the real card config
+  _resolveDeviceType() {
     let deviceType = this._config.device_type;
     if (!deviceType) {
       const cfgType = String(this._config.type || '').toLowerCase();
@@ -1655,6 +1858,31 @@ class IbepowerCardEditor extends HTMLElement {
       else if (cfgType.includes('ibemeter')) deviceType = 'Ibemeter';
       else if (cfgType.includes('ibeplug')) deviceType = 'Ibeplug';
     }
+    return deviceType;
+  }
+
+  _resolveMarker(model) {
+    if (model === 'Ibeplug') return { markerField: 'ibeplug', entityDomain: 'switch' };
+    if (model === 'Ibediv') return { markerField: 'calculated_watts', entityDomain: 'sensor' };
+    return { markerField: 'grid_voltage', entityDomain: 'sensor' };
+  }
+
+  _computeSlugsKey(hass) {
+    if (!hass) return '';
+    const deviceType = this._resolveDeviceType();
+    if (!deviceType) return '';
+    const model = String(deviceType).charAt(0).toUpperCase() + String(deviceType).slice(1).toLowerCase();
+    const { markerField, entityDomain } = this._resolveMarker(model);
+    const slugs = ibepGetSlugs(hass, model, markerField, entityDomain);
+    return model + ':' + slugs.join(',') + ':' + (this._config.device || '');
+  }
+
+  _render() {
+    const hass = this._hass;
+    if (!hass) return;
+    const t = ibepI18n(hass);
+
+    const deviceType = this._resolveDeviceType();
 
     if (!deviceType) {
       this.shadowRoot.innerHTML = `
@@ -1668,10 +1896,7 @@ class IbepowerCardEditor extends HTMLElement {
 
     // Get available devices of this type
     const model = String(deviceType).charAt(0).toUpperCase() + String(deviceType).slice(1).toLowerCase();
-    let markerField, entityDomain;
-    if (model === 'Ibeplug') { markerField = 'ibeplug'; entityDomain = 'switch'; }
-    else if (model === 'Ibediv') { markerField = 'calculated_watts'; entityDomain = 'sensor'; }
-    else { markerField = 'grid_voltage'; entityDomain = 'sensor'; }
+    const { markerField, entityDomain } = this._resolveMarker(model);
 
     const slugs = ibepGetSlugs(hass, model, markerField, entityDomain);
     const autoTpl = slugs.length === 1 ? t.auto_detected_one : t.auto_detected_other;
@@ -1703,6 +1928,7 @@ class IbepowerCardEditor extends HTMLElement {
 
     this.shadowRoot.getElementById('device-select')?.addEventListener('change', (e) => {
       this._config = { ...this._config, device: e.target.value || undefined };
+      this._lastSlugsKey = '';
       this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config }, bubbles: true, composed: true }));
     });
   }

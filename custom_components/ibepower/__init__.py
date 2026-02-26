@@ -1,7 +1,9 @@
 import logging
+import json
 from pathlib import Path
 from datetime import timedelta
-from homeassistant.components.http import StaticPathConfig
+from aiohttp import web
+from homeassistant.components.http import HomeAssistantView
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -16,35 +18,47 @@ from .entity_naming import get_device_slug, get_object_suffix_from_unique_id
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["switch", "sensor", "select", "number", "button"]
-STATIC_URL_PATH = "/ibepower_static"
 STATIC_DIR_PATH = Path(__file__).resolve().parent / "www"
-STATIC_REGISTERED_KEY = "_static_path_registered"
-CARD_JS_URL = STATIC_URL_PATH + "/ibepower-cards.js"
-CARD_JS_REGISTERED_KEY = "_card_js_registered"
+STATIC_URL_BASE = "/ibepower_static"
+CARD_JS_FILE = "ibepower-cards.js"
 
 
-async def _async_register_static_path(hass: HomeAssistant) -> None:
-    """Expose integration bundled assets under /ibepower_static."""
-    if not STATIC_DIR_PATH.exists():
-        return
+class _IbepowerStaticView(HomeAssistantView):
+    """Serve bundled assets with explicit no-cache headers."""
 
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    if domain_data.get(STATIC_REGISTERED_KEY):
-        return
+    requires_auth = False
+    url = STATIC_URL_BASE + "/{path:.+}"
+    name = "ibepower_static"
 
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(STATIC_URL_PATH, str(STATIC_DIR_PATH), cache_headers=False)]
-    )
-    domain_data[STATIC_REGISTERED_KEY] = True
+    async def get(self, request, path):
+        base = STATIC_DIR_PATH.resolve()
+        fpath = (STATIC_DIR_PATH / path).resolve()
+        if not fpath.is_relative_to(base) or not fpath.is_file():
+            raise web.HTTPNotFound()
+        return web.FileResponse(
+            fpath,
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+            },
+        )
 
 
-async def _async_register_card_js(hass: HomeAssistant) -> None:
-    """Register the custom Lovelace card JS so it appears in the card picker."""
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    if domain_data.get(CARD_JS_REGISTERED_KEY):
-        return
-    add_extra_js_url(hass, CARD_JS_URL)
-    domain_data[CARD_JS_REGISTERED_KEY] = True
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Set up the ibepower domain (runs once, before any config entry)."""
+    hass.data.setdefault(DOMAIN, {})
+
+    # Serve www/ files via a custom view with no-cache headers
+    hass.http.register_view(_IbepowerStaticView())
+
+    # Use file mtime as cache buster so every deploy invalidates the URL
+    try:
+        mtime = int((STATIC_DIR_PATH / CARD_JS_FILE).stat().st_mtime)
+    except Exception:
+        mtime = 0
+    add_extra_js_url(hass, f"{STATIC_URL_BASE}/{CARD_JS_FILE}?v={mtime}")
+
+    return True
 
 
 async def _async_migrate_entity_ids(hass: HomeAssistant, entry: ConfigEntry):
@@ -98,9 +112,6 @@ async def _async_migrate_entity_ids(hass: HomeAssistant, entry: ConfigEntry):
             )
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
-    await _async_register_static_path(hass)
-    await _async_register_card_js(hass)
-
     host = entry.data["host"]
     name = entry.data["name"]
     mac = entry.data.get("mac")
@@ -131,7 +142,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     await coordinator.async_config_entry_first_refresh()
 
-    hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
         "device": device,
         "coordinator": coordinator,
@@ -147,13 +157,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        domain_data = hass.data.get(DOMAIN, {})
-        entry_data = domain_data.get(entry.entry_id, {})
-        device = entry_data.get("device")
-        if device and hasattr(device, "async_close_session"):
-            await device.async_close_session()
-        domain_data.pop(entry.entry_id, None)
-        has_active_entries = any(key != STATIC_REGISTERED_KEY for key in domain_data)
-        if not has_active_entries:
-            hass.data.pop(DOMAIN, None)
+        entry_data = hass.data[DOMAIN].pop(entry.entry_id, None)
+        if entry_data:
+            device = entry_data.get("device")
+            if device and hasattr(device, "async_close_session"):
+                await device.async_close_session()
     return unload_ok
