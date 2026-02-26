@@ -179,7 +179,7 @@ Two release tasks are available in VS Code (`Terminal -> Run Task`):
 
 1. `HACS: Build release ZIP`
    - Generates `dist/ibepower_integration.zip` using `hacs.json` filename.
-   - Packages `custom_components/` and excludes Python cache artifacts.
+   - Packages the content of `custom_components/ibepower` at ZIP root with Linux-compatible permissions and excludes Python cache artifacts.
 
 2. `HACS: Publish release (auto patch bump)`
    - Automatically bumps `custom_components/ibepower/manifest.json` version (`patch`).
@@ -201,6 +201,7 @@ Requirements for publish task:
    - `gh` (GitHub CLI) installed and authenticated (`gh auth login`), or
    - `GITHUB_TOKEN` (or `GH_TOKEN`) environment variable with repository permissions (release + contents write).
 - If `gh` and env token are both missing, the script asks for the token interactively in the terminal.
+- The entered token is stored encrypted (Windows user profile, DPAPI) and reused automatically in next executions.
 - Clean working tree before running publish.
 
 ---
