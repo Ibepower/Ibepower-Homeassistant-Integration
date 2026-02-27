@@ -21,11 +21,9 @@ function ibepI18n(hass) {
       power:'Potencia', voltage:'Tensión', current:'Intensidad', pf:'Factor P.',
       energy:'Energía', peak:'Máx', nodev:'Sin dispositivos detectados',
       importing:'Importando', exporting:'Exportando', imp:'Imp', exp:'Exp',
-      consumption:'Consumo', solar:'Solar', grid:'Red', home:'Casa', battery:'Batería',
-      load:'Carga', diverter:'Derivador', auto:'Auto', manual:'Manual',
-      manager:'Gestor', mode:'Modo', pwm:'PWM', soc:'SOC',
-      select_device:'Seleccionar dispositivo', all_auto:'Auto (todos)',
-      frequency:'Frecuencia',
+      diverter:'Derivador', auto:'Auto', manual:'Manual',
+      manager:'Gestor', mode:'Modo',
+      select_device:'Seleccionar dispositivo',
       loading_devices:'Cargando dispositivos…',
       auto_detected_one:'Auto ({count} detectado)',
       auto_detected_other:'Auto ({count} detectados)',
@@ -36,11 +34,9 @@ function ibepI18n(hass) {
       power:'Power', voltage:'Voltage', current:'Current', pf:'Power F.',
       energy:'Energy', peak:'Peak', nodev:'No devices detected',
       importing:'Importing', exporting:'Exporting', imp:'Imp', exp:'Exp',
-      consumption:'Consumption', solar:'Solar', grid:'Grid', home:'Home', battery:'Battery',
-      load:'Load', diverter:'Diverter', auto:'Auto', manual:'Manual',
-      manager:'Manager', mode:'Mode', pwm:'PWM', soc:'SOC',
-      select_device:'Select device', all_auto:'Auto (all)',
-      frequency:'Frequency',
+      diverter:'Diverter', auto:'Auto', manual:'Manual',
+      manager:'Manager', mode:'Mode',
+      select_device:'Select device',
       loading_devices:'Loading devices…',
       auto_detected_one:'Auto ({count} detected)',
       auto_detected_other:'Auto ({count} detected)',
@@ -51,11 +47,9 @@ function ibepI18n(hass) {
       power:'Potência', voltage:'Tensão', current:'Corrente', pf:'Fator P.',
       energy:'Energia', peak:'Máx', nodev:'Nenhum dispositivo detectado',
       importing:'Importando', exporting:'Exportando', imp:'Imp', exp:'Exp',
-      consumption:'Consumo', solar:'Solar', grid:'Rede', home:'Casa', battery:'Bateria',
-      load:'Carga', diverter:'Desviador', auto:'Auto', manual:'Manual',
-      manager:'Gestor', mode:'Modo', pwm:'PWM', soc:'SOC',
-      select_device:'Selecionar dispositivo', all_auto:'Auto (todos)',
-      frequency:'Frequência',
+      diverter:'Desviador', auto:'Auto', manual:'Manual',
+      manager:'Gestor', mode:'Modo',
+      select_device:'Selecionar dispositivo',
       loading_devices:'Carregando dispositivos…',
       auto_detected_one:'Auto ({count} detectado)',
       auto_detected_other:'Auto ({count} detectados)',
@@ -381,6 +375,18 @@ const IBEPLUG_CSS = `
   .plug-toggle.is-off .plug-status { color: rgba(255,255,255,0.45); }
   /* Power section */
   .power-section { width: 100%; text-align: center; box-sizing: border-box; overflow: hidden; }
+  .plug-clickable {
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.2s ease, transform 0.2s ease;
+  }
+  .plug-clickable:hover {
+    background: rgba(255,255,255,0.06);
+  }
+  .plug-clickable:active {
+    transform: scale(0.99);
+  }
   .power-label {
     font-size: 0.74rem; font-weight: 600; text-transform: uppercase;
     letter-spacing: 0.05em; color: rgba(255,255,255,0.55); margin-bottom: 2px;
@@ -409,6 +415,7 @@ const IBEPLUG_CSS = `
   .plug-metric {
     display: flex; flex-direction: column; align-items: center;
     gap: 2px; flex: 1; min-width: 0; overflow: hidden; max-width: 100%;
+    border-radius: 10px; padding: 6px 4px;
   }
   .plug-metric-val {
     font-size: 1.12rem; font-weight: 700; color: #fff;
@@ -429,7 +436,10 @@ const IBEPLUG_CSS = `
     text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;
   }
   .plug-energy-rows { display: flex; flex-direction: column; gap: 4px; }
-  .plug-energy-row { display: flex; justify-content: space-between; align-items: center; }
+  .plug-energy-row {
+    display: flex; justify-content: space-between; align-items: center;
+    border-radius: 8px; padding: 4px 6px;
+  }
   .plug-energy-lbl { font-size: 0.75rem; font-weight: 600; color: rgba(255,255,255,0.5); }
   .plug-energy-val {
     font-size: 0.86rem; font-weight: 700; color: #fff;
@@ -464,6 +474,11 @@ class IbepowerIbeplugCard extends HTMLElement {
     this._peakW = 0;
     this._ddOpen = false;
     this._peakFetchInflight = {};
+    this._peakFetchTs = {};
+    this._historyDailyStatsByBase = {};
+    this._sessionDayKeyByBase = {};
+    this._sessionPeakByBase = {};
+    this._currentAbsPowerByBase = {};
   }
 
   setConfig(config) {
@@ -479,12 +494,155 @@ class IbepowerIbeplugCard extends HTMLElement {
     }
   }
 
+  disconnectedCallback() {
+    cancelAnimationFrame(this._rafId);
+  }
+
   set hass(hass) {
     this._hass = hass;
     if (!this._ddOpen) this._render();
   }
 
   getCardSize() { return 6; }
+
+  _dayKey(ts) {
+    const d = new Date(ts);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  _quantile(values, q) {
+    const nums = values.filter(v => Number.isFinite(v) && v > 0).sort((a, b) => a - b);
+    if (!nums.length) return 0;
+    const pos = (nums.length - 1) * q;
+    const base = Math.floor(pos);
+    const rest = pos - base;
+    const next = nums[base + 1];
+    return next === undefined ? nums[base] : nums[base] + rest * (next - nums[base]);
+  }
+
+  _filteredMax(values) {
+    const nums = values.filter(v => Number.isFinite(v) && v > 0).sort((a, b) => a - b);
+    if (!nums.length) return 0;
+    if (nums.length < 5) return nums[nums.length - 1];
+    const trimCount = Math.min(Math.max(1, Math.round(nums.length * 0.15)), 3);
+    const trimmed = nums.slice(0, Math.max(1, nums.length - trimCount));
+    const q1 = this._quantile(trimmed, 0.25);
+    const q3 = this._quantile(trimmed, 0.75);
+    const iqr = Math.max(0, q3 - q1);
+    const percentileCap = this._quantile(trimmed, 0.85);
+    const upperFence = Math.min(percentileCap, q3 + Math.max(iqr, q3 * 0.08));
+    const filtered = trimmed.filter(v => v <= upperFence);
+    return filtered.length ? filtered[filtered.length - 1] : trimmed[trimmed.length - 1];
+  }
+
+  _getPeakW(base) {
+    const historyStats = this._historyDailyStatsByBase[base] || {};
+    const merged = { ...historyStats };
+    const sessionPeak = Number(this._sessionPeakByBase[base]) || 0;
+    const sessionDayKey = this._sessionDayKeyByBase[base];
+    if (sessionDayKey && sessionPeak > 0) {
+      merged[sessionDayKey] = Math.max(Number(merged[sessionDayKey]) || 0, sessionPeak);
+    }
+    return this._filteredMax(Object.values(merged).map(v => Number(v)));
+  }
+
+  _updatePeakDisplay(base) {
+    if (!this.isConnected || this._activeBase !== base) return;
+    const sr = this.shadowRoot;
+    if (!sr.querySelector('.plug-panel')) return;
+    const t = ibepI18n(this._hass);
+    const peakW = this._getPeakW(base);
+    const absPower = Number(this._currentAbsPowerByBase[base]) || 0;
+    const barPct = peakW > 0 ? Math.min(100, Math.round((absPower / peakW) * 100)) : 0;
+    const barColor = barPct > 75 ? '#e74c3c' : barPct > 40 ? '#f39c12' : '#2ecc71';
+    const peakEl = sr.querySelector('[data-v="peak"]');
+    const barEl = sr.querySelector('[data-v="bar"]');
+    if (peakEl) peakEl.textContent = t.peak + ': ' + (peakW > 0 ? Math.round(peakW) + ' W' : '-- W');
+    if (barEl) {
+      barEl.style.width = barPct + '%';
+      barEl.style.background = barColor;
+    }
+  }
+
+  _applyHistoryPeak(base, dayStats, histStatsKey, histPeakTsKey) {
+    this._historyDailyStatsByBase[base] = dayStats;
+    if (Object.keys(dayStats).length > 0) localStorage.setItem(histStatsKey, JSON.stringify(dayStats));
+    else localStorage.removeItem(histStatsKey);
+    localStorage.setItem(histPeakTsKey, String(Date.now()));
+    this._peakW = this._getPeakW(base);
+    this._updatePeakDisplay(base);
+  }
+
+  _fetchPeakHistoryFallback(hass, base, powerEid, histStatsKey, histPeakTsKey, startIso, endIso) {
+    const histPath =
+      'history/period/' + encodeURIComponent(startIso) +
+      '?filter_entity_id=' + encodeURIComponent(powerEid) +
+      '&end_time=' + encodeURIComponent(endIso) +
+      '&minimal_response&no_attributes';
+    return hass.callApi('GET', histPath)
+      .then(rows => {
+        const dayStats = {};
+        if (Array.isArray(rows) && Array.isArray(rows[0])) {
+          for (const r of rows[0]) {
+            const v = Math.abs(Number(String(r?.state ?? '').replace(',', '.')));
+            if (!Number.isFinite(v)) continue;
+            const ts = Date.parse(r?.last_changed || r?.last_updated || r?.lu || r?.lc || '');
+            if (!Number.isFinite(ts)) continue;
+            const dayKey = this._dayKey(ts);
+            dayStats[dayKey] = Math.max(Number(dayStats[dayKey]) || 0, v);
+          }
+        }
+        this._applyHistoryPeak(base, dayStats, histStatsKey, histPeakTsKey);
+      });
+  }
+
+  _fetchPeakHistory(hass, base, powerEid, histStatsKey, histPeakTsKey, nowMs) {
+    if (!powerEid || this._peakFetchInflight[base]) return;
+    const peakFetchTtlMs = 10 * 60 * 1000;
+    const lastFetchMs = Number(this._peakFetchTs[base]) || 0;
+    if (lastFetchMs && (nowMs - lastFetchMs) <= peakFetchTtlMs) return;
+    this._peakFetchInflight[base] = true;
+    const endIso = new Date(nowMs).toISOString();
+    const startIso = new Date(nowMs - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const fetchStats = typeof hass.callWS === 'function'
+      ? hass.callWS({
+          type: 'recorder/statistics_during_period',
+          start_time: startIso,
+          end_time: endIso,
+          statistic_ids: [powerEid],
+          period: 'day',
+          types: ['max']
+        })
+      : Promise.reject(new Error('callWS unavailable'));
+    fetchStats
+      .then(result => {
+        const stats = Array.isArray(result?.[powerEid]) ? result[powerEid] : [];
+        const dayStats = {};
+        for (const item of stats) {
+          const v = Math.abs(Number(item?.max));
+          if (!Number.isFinite(v)) continue;
+          const ts = Date.parse(item?.start || item?.start_time || item?.end || item?.end_time || '');
+          if (!Number.isFinite(ts)) continue;
+          dayStats[this._dayKey(ts)] = Math.max(Number(dayStats[this._dayKey(ts)]) || 0, v);
+        }
+        if (Object.keys(dayStats).length > 0) {
+          this._applyHistoryPeak(base, dayStats, histStatsKey, histPeakTsKey);
+          return;
+        }
+        return this._fetchPeakHistoryFallback(hass, base, powerEid, histStatsKey, histPeakTsKey, startIso, endIso);
+      })
+      .catch(() =>
+        this._fetchPeakHistoryFallback(hass, base, powerEid, histStatsKey, histPeakTsKey, startIso, endIso)
+          .catch(() => {})
+      )
+      .finally(() => {
+        this._peakFetchTs[base] = Date.now();
+        delete this._peakFetchInflight[base];
+      });
+  }
 
   _render() {
     const hass = this._hass;
@@ -501,60 +659,48 @@ class IbepowerIbeplugCard extends HTMLElement {
     const switchEid = ibepSwitchEid(hass, base, 'ibeplug');
     const isOn = switchObj?.state === 'on';
 
-    const powerW = ibepNum(ibepState(hass, base, 'power'));
-    const voltageV = ibepNum(ibepState(hass, base, 'voltage'));
-    const currentA = ibepNum(ibepState(hass, base, 'current'));
-    const factorPct = ibepNum(ibepState(hass, base, 'factor'));
-    const kwToday = ibepNum(ibepState(hass, base, 'consumption'));
-    const kwYesterday = ibepNum(ibepState(hass, base, 'kw_yesterday'));
-    const kwTotal = ibepNum(ibepState(hass, base, 'kw_total'));
+	    const powerW = ibepNum(ibepState(hass, base, 'power'));
+	    const voltageV = ibepNum(ibepState(hass, base, 'voltage'));
+	    const currentA = ibepNum(ibepState(hass, base, 'current'));
+	    const factorPct = ibepNum(ibepState(hass, base, 'factor'));
+	    const kwToday = ibepNum(ibepState(hass, base, 'consumption'));
+	    const kwYesterday = ibepNum(ibepState(hass, base, 'kw_yesterday'));
+	    const kwTotal = ibepNum(ibepState(hass, base, 'kw_total'));
+	    const powerEid = ibepState(hass, base, 'power')?.entity_id || '';
+	    const voltageEid = ibepState(hass, base, 'voltage')?.entity_id || '';
+	    const currentEid = ibepState(hass, base, 'current')?.entity_id || '';
+	    const factorEid = ibepState(hass, base, 'factor')?.entity_id || '';
+	    const todayEid = ibepState(hass, base, 'consumption')?.entity_id || '';
+	    const yesterdayEid = ibepState(hass, base, 'kw_yesterday')?.entity_id || '';
+	    const totalEid = ibepState(hass, base, 'kw_total')?.entity_id || '';
 
-    // Peak power (local + history API)
+    // Representative peak: maximum of the last 30 daily maxima after removing high outliers.
     const absPower = powerW !== null ? Math.abs(powerW) : 0;
-    const peakKey = 'ibep_plug_peak_' + base;
-    const histPeakKey = 'ibep_plug_peak_hist_' + base;
-    const histPeakTsKey = 'ibep_plug_peak_hist_ts_' + base;
-    const peakFetchTtlMs = 10 * 60 * 1000;
-    const localPeakW = Number(localStorage.getItem(peakKey)) || 0;
-    const histPeakW = Number(localStorage.getItem(histPeakKey)) || 0;
-    const histTs = Number(localStorage.getItem(histPeakTsKey)) || 0;
-    this._peakW = Math.max(localPeakW, histPeakW, absPower);
-    if (absPower > localPeakW) localStorage.setItem(peakKey, String(this._peakW));
-
-    // Fetch peak from HA history (30 days, refresh every 10 min)
-    const powerEid = ibepState(hass, base, 'power')?.entity_id || '';
+    const histStatsKey = 'ibep_plug_peak_filtered_hist_' + base;
+    const histPeakTsKey = 'ibep_plug_peak_filtered_hist_ts_' + base;
     const nowMs = Date.now();
-    if (powerEid && (!histTs || (nowMs - histTs) > peakFetchTtlMs)) {
-      if (!this._peakFetchInflight[base]) {
-        this._peakFetchInflight[base] = true;
-        const endIso = new Date().toISOString();
-        const startIso = new Date(nowMs - 30 * 24 * 60 * 60 * 1000).toISOString();
-        const histPath =
-          '/api/history/period/' + encodeURIComponent(startIso) +
-          '?filter_entity_id=' + encodeURIComponent(powerEid) +
-          '&end_time=' + encodeURIComponent(endIso) +
-          '&minimal_response&no_attributes';
-        hass.callApi('GET', histPath)
-          .then(rows => {
-            let maxH = 0;
-            if (Array.isArray(rows) && Array.isArray(rows[0])) {
-              for (const r of rows[0]) {
-                const v = Math.abs(Number(String(r?.state ?? '').replace(',', '.')));
-                if (Number.isFinite(v) && v > maxH) maxH = v;
-              }
-            }
-            if (maxH > 0) {
-              localStorage.setItem(histPeakKey, String(maxH));
-              localStorage.setItem(histPeakTsKey, String(Date.now()));
-              if (maxH > this._peakW) localStorage.setItem(peakKey, String(maxH));
-            } else {
-              localStorage.setItem(histPeakTsKey, String(Date.now()));
-            }
-          })
-          .catch(() => localStorage.setItem(histPeakTsKey, String(Date.now())))
-          .finally(() => { delete this._peakFetchInflight[base]; });
-      }
+    const sessionDayKey = this._dayKey(nowMs);
+    if (this._sessionDayKeyByBase[base] !== sessionDayKey) {
+      this._sessionDayKeyByBase[base] = sessionDayKey;
+      this._sessionPeakByBase[base] = 0;
     }
+    let histDayStats = {};
+    try {
+      histDayStats = JSON.parse(localStorage.getItem(histStatsKey) || '{}') || {};
+    } catch (e) {
+      histDayStats = {};
+    }
+    const histTs = Number(localStorage.getItem(histPeakTsKey)) || 0;
+    const peakFetchTtlMs = 10 * 60 * 1000;
+    const hasFreshHistCache = histTs && (nowMs - histTs) <= peakFetchTtlMs;
+    if (this._historyDailyStatsByBase[base] === undefined && hasFreshHistCache) this._historyDailyStatsByBase[base] = histDayStats;
+    this._currentAbsPowerByBase[base] = absPower;
+    this._sessionPeakByBase[base] = Math.max(Number(this._sessionPeakByBase[base]) || 0, absPower);
+    this._peakW = this._getPeakW(base);
+    this._activeBase = base;
+
+    // Fetch daily statistics from HA recorder (30 days) when the card is shown.
+	    this._fetchPeakHistory(hass, base, powerEid, histStatsKey, histPeakTsKey, nowMs);
 
     const barPct = this._peakW > 0 ? Math.min(100, Math.round((absPower / this._peakW) * 100)) : 0;
     const barColor = barPct > 75 ? '#e74c3c' : barPct > 40 ? '#f39c12' : '#2ecc71';
@@ -597,49 +743,58 @@ class IbepowerIbeplugCard extends HTMLElement {
               </div>
               <div class="plug-status" data-v="status">${isOn ? t.on : t.off}</div>
             </div>
-            <div class="power-section">
-              <div class="power-label">${t.power}</div>
-              <div class="power-value" data-v="power">${powerW !== null ? Math.round(powerW) + ' W' : '-- W'}</div>
-              <div class="power-peak" data-v="peak">${t.peak}: ${this._peakW > 0 ? Math.round(this._peakW) + ' W' : '-- W'}</div>
-              <div class="power-bar-track"><div class="power-bar-fill" data-v="bar" style="width:${barPct}%;background:${barColor};"></div></div>
-            </div>
-            <div class="plug-metrics">
-              <div class="plug-metric">
-                <ha-icon icon="mdi:flash" style="--mdc-icon-size:20px;color:#f1c40f;"></ha-icon>
-                <div class="plug-metric-val" data-v="voltage">${ibepFmt(voltageV, 'V', 1)}</div>
-                <div class="plug-metric-lbl">${t.voltage}</div>
-              </div>
-              <div class="plug-metric">
-                <ha-icon icon="mdi:current-ac" style="--mdc-icon-size:20px;color:#3498db;"></ha-icon>
-                <div class="plug-metric-val" data-v="current">${ibepFmt(currentA, 'A', 2)}</div>
-                <div class="plug-metric-lbl">${t.current}</div>
-              </div>
-              <div class="plug-metric">
-                <ha-icon icon="mdi:cosine-wave" style="--mdc-icon-size:20px;color:#9b59b6;"></ha-icon>
-                <div class="plug-metric-val" data-v="factor">${ibepFmt(factorPct, '%', 0)}</div>
-                <div class="plug-metric-lbl">${t.pf}</div>
-              </div>
-            </div>
-            <div class="plug-energy">
-              <div class="plug-energy-title">${t.energy}</div>
-              <div class="plug-energy-rows">
-                <div class="plug-energy-row"><span class="plug-energy-lbl">${t.today}</span><span class="plug-energy-val" data-v="today">${ibepFmtK(kwToday)}</span></div>
-                <div class="plug-energy-row"><span class="plug-energy-lbl">${t.yesterday}</span><span class="plug-energy-val" data-v="yesterday">${ibepFmtK(kwYesterday)}</span></div>
-                <div class="plug-energy-row"><span class="plug-energy-lbl">${t.total}</span><span class="plug-energy-val" data-v="total">${ibepFmtK(kwTotal)}</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </ha-card>`;
+	            <div class="power-section ${powerEid ? 'plug-clickable' : ''}" ${powerEid ? `data-entity="${powerEid}"` : ''}>
+	              <div class="power-label">${t.power}</div>
+	              <div class="power-value" data-v="power">${powerW !== null ? Math.round(powerW) + ' W' : '-- W'}</div>
+	              <div class="power-peak" data-v="peak">${t.peak}: ${this._peakW > 0 ? Math.round(this._peakW) + ' W' : '-- W'}</div>
+	              <div class="power-bar-track"><div class="power-bar-fill" data-v="bar" style="width:${barPct}%;background:${barColor};"></div></div>
+	            </div>
+	            <div class="plug-metrics">
+	              <div class="plug-metric ${voltageEid ? 'plug-clickable' : ''}" ${voltageEid ? `data-entity="${voltageEid}"` : ''}>
+	                <ha-icon icon="mdi:flash" style="--mdc-icon-size:20px;color:#f1c40f;"></ha-icon>
+	                <div class="plug-metric-val" data-v="voltage">${ibepFmt(voltageV, 'V', 1)}</div>
+	                <div class="plug-metric-lbl">${t.voltage}</div>
+	              </div>
+	              <div class="plug-metric ${currentEid ? 'plug-clickable' : ''}" ${currentEid ? `data-entity="${currentEid}"` : ''}>
+	                <ha-icon icon="mdi:current-ac" style="--mdc-icon-size:20px;color:#3498db;"></ha-icon>
+	                <div class="plug-metric-val" data-v="current">${ibepFmt(currentA, 'A', 2)}</div>
+	                <div class="plug-metric-lbl">${t.current}</div>
+	              </div>
+	              <div class="plug-metric ${factorEid ? 'plug-clickable' : ''}" ${factorEid ? `data-entity="${factorEid}"` : ''}>
+	                <ha-icon icon="mdi:cosine-wave" style="--mdc-icon-size:20px;color:#9b59b6;"></ha-icon>
+	                <div class="plug-metric-val" data-v="factor">${ibepFmt(factorPct, '%', 0)}</div>
+	                <div class="plug-metric-lbl">${t.pf}</div>
+	              </div>
+	            </div>
+	            <div class="plug-energy">
+	              <div class="plug-energy-title">${t.energy}</div>
+	              <div class="plug-energy-rows">
+	                <div class="plug-energy-row ${todayEid ? 'plug-clickable' : ''}" ${todayEid ? `data-entity="${todayEid}"` : ''}><span class="plug-energy-lbl">${t.today}</span><span class="plug-energy-val" data-v="today">${ibepFmtK(kwToday)}</span></div>
+	                <div class="plug-energy-row ${yesterdayEid ? 'plug-clickable' : ''}" ${yesterdayEid ? `data-entity="${yesterdayEid}"` : ''}><span class="plug-energy-lbl">${t.yesterday}</span><span class="plug-energy-val" data-v="yesterday">${ibepFmtK(kwYesterday)}</span></div>
+	                <div class="plug-energy-row ${totalEid ? 'plug-clickable' : ''}" ${totalEid ? `data-entity="${totalEid}"` : ''}><span class="plug-energy-lbl">${t.total}</span><span class="plug-energy-val" data-v="total">${ibepFmtK(kwTotal)}</span></div>
+	              </div>
+	            </div>
+	          </div>
+	        </div>
+	      </ha-card>`;
 
     // Toggle handler
-    this.shadowRoot.getElementById('toggle')?.addEventListener('click', () => {
-      if (switchEid) hass.callService('switch', 'toggle', { entity_id: switchEid });
-    });
+	    this.shadowRoot.getElementById('toggle')?.addEventListener('click', () => {
+	      if (switchEid) hass.callService('switch', 'toggle', { entity_id: switchEid });
+	    });
 
-    // Dropdown handler
-    ibepSetupDropdown(this.shadowRoot, () => { this._render(); }, this);
-  }
+	    this.shadowRoot.querySelectorAll('.plug-clickable[data-entity]').forEach(el => {
+	      el.addEventListener('click', () => {
+	        const eid = el.dataset.entity;
+	        if (eid) {
+	          this.dispatchEvent(new CustomEvent('hass-more-info', { detail: { entityId: eid }, bubbles: true, composed: true }));
+	        }
+	      });
+	    });
+
+	    // Dropdown handler
+	    ibepSetupDropdown(this.shadowRoot, () => { this._render(); }, this);
+	  }
 }
 
 // =============================================================================
@@ -1287,6 +1442,7 @@ class IbepowerIbedivCard extends HTMLElement {
     this._sliderActive = false;
     this._sliderReleasedAt = 0;
     this._sliderDocCleanup = null;
+    this._stickyStateCache = {};
   }
 
   setConfig(config) {
@@ -1390,35 +1546,49 @@ class IbepowerIbedivCard extends HTMLElement {
       return;
     }
     const base = ibepResolveSlug(slugs, 'ibep_div_selector', this._config.device);
+    const stickyCache = this._stickyStateCache[base] || (this._stickyStateCache[base] = {});
+    const keepSticky = (key, stateObj) => {
+      if (ibepValid(stateObj)) stickyCache[key] = stateObj;
+      return stickyCache[key] || stateObj || null;
+    };
+    const pickSticky = (key, stateObjs) => {
+      const firstValid = stateObjs.find(ibepValid) || null;
+      if (firstValid) stickyCache[key] = firstValid;
+      return stickyCache[key] || stateObjs.find(Boolean) || null;
+    };
+    const sensorState = field => keepSticky('sensor:' + field, ibepState(hass, base, field));
+    const switchState = (...suffixes) => pickSticky('switch:' + suffixes.join('|'), suffixes.map(suffix => ibepSwitchState(hass, base, suffix)));
+    const selectState = (...fields) => pickSticky('select:' + fields.join('|'), fields.map(field => ibepSelectState(hass, base, field)));
+    const numberState = (...fields) => pickSticky('number:' + fields.join('|'), fields.map(field => ibepNumberState(hass, base, field)));
 
     // ---- Sensor values ----
-    const solarW   = ibepNum(ibepState(hass, base, 'solar_watts'));
-    const gridW    = ibepNum(ibepState(hass, base, 'grid_watts'));
-    const loadW    = ibepNum(ibepState(hass, base, 'load_watts'));
-    const batteryW = ibepNum(ibepState(hass, base, 'battery_power'));
-    const batterySoc = ibepNum(ibepState(hass, base, 'battery_soc'));
-    const diverterW = ibepNum(ibepState(hass, base, 'calculated_watts'));
-    const pwmRaw   = ibepNum(ibepState(hass, base, 'pwm_value'));
+    const solarW   = ibepNum(sensorState('solar_watts'));
+    const gridW    = ibepNum(sensorState('grid_watts'));
+    const loadW    = ibepNum(sensorState('load_watts'));
+    const batteryW = ibepNum(sensorState('battery_power'));
+    const batterySoc = ibepNum(sensorState('battery_soc'));
+    const diverterW = ibepNum(sensorState('calculated_watts'));
+    const pwmRaw   = ibepNum(sensorState('pwm_value'));
     const pwmPct   = pwmRaw !== null ? Math.round(Math.max(0, Math.min(100, pwmRaw))) : null;
     const pwmText  = pwmPct !== null ? (pwmPct + ' %') : '-- %';
 
-    const solarK    = ibepNum(ibepState(hass, base, 'kw_solar_today'));
-    const importK   = ibepNum(ibepState(hass, base, 'kw_import_today'));
-    const exportK   = ibepNum(ibepState(hass, base, 'kw_export_today'));
-    const diverterK = ibepNum(ibepState(hass, base, 'kw_diverter_today'));
+    const solarK    = ibepNum(sensorState('kw_solar_today'));
+    const importK   = ibepNum(sensorState('kw_import_today'));
+    const exportK   = ibepNum(sensorState('kw_export_today'));
+    const diverterK = ibepNum(sensorState('kw_diverter_today'));
 
     // ---- Entity availability checks ----
-    const hasSolar        = ibepValid(ibepState(hass, base, 'solar_watts'));
-    const hasGrid         = ibepValid(ibepState(hass, base, 'grid_watts'));
-    const hasHome         = ibepValid(ibepState(hass, base, 'load_watts'));
-    const hasBatteryPower = ibepValid(ibepState(hass, base, 'battery_power'));
-    const hasBatterySoc   = ibepValid(ibepState(hass, base, 'battery_soc'));
-    const hasDiverter     = ibepValid(ibepState(hass, base, 'calculated_watts'));
-    const hasPwm          = ibepValid(ibepState(hass, base, 'pwm_value'));
-    const hasSolarToday   = ibepValid(ibepState(hass, base, 'kw_solar_today'));
-    const hasImportToday  = ibepValid(ibepState(hass, base, 'kw_import_today'));
-    const hasExportToday  = ibepValid(ibepState(hass, base, 'kw_export_today'));
-    const hasDiverterToday= ibepValid(ibepState(hass, base, 'kw_diverter_today'));
+    const hasSolar        = ibepValid(sensorState('solar_watts'));
+    const hasGrid         = ibepValid(sensorState('grid_watts'));
+    const hasHome         = ibepValid(sensorState('load_watts'));
+    const hasBatteryPower = ibepValid(sensorState('battery_power'));
+    const hasBatterySoc   = ibepValid(sensorState('battery_soc'));
+    const hasDiverter     = ibepValid(sensorState('calculated_watts'));
+    const hasPwm          = ibepValid(sensorState('pwm_value'));
+    const hasSolarToday   = ibepValid(sensorState('kw_solar_today'));
+    const hasImportToday  = ibepValid(sensorState('kw_import_today'));
+    const hasExportToday  = ibepValid(sensorState('kw_export_today'));
+    const hasDiverterToday= ibepValid(sensorState('kw_diverter_today'));
     const hasBatt         = hasBatteryPower || hasBatterySoc;
     const hasAnyInverter  = hasHome || hasGrid || hasDiverter || hasSolar || hasBatteryPower;
 
@@ -1467,31 +1637,31 @@ class IbepowerIbedivCard extends HTMLElement {
     const batterySocText = hasBatterySoc ? ('SoC ' + Math.round(batterySoc ?? 0) + ' %') : '';
 
     // ---- Entity IDs for more-info ----
-    const solarEid    = ibepState(hass, base, 'solar_watts')?.entity_id || '';
-    const batteryEid  = ibepState(hass, base, 'battery_power')?.entity_id || '';
-    const gridEid     = ibepState(hass, base, 'grid_watts')?.entity_id || '';
-    const homeEid     = ibepState(hass, base, 'load_watts')?.entity_id || '';
-    const inverterEid = ibepState(hass, base, 'calculated_watts')?.entity_id || '';
+    const solarEid    = sensorState('solar_watts')?.entity_id || '';
+    const batteryEid  = sensorState('battery_power')?.entity_id || '';
+    const gridEid     = sensorState('grid_watts')?.entity_id || '';
+    const homeEid     = sensorState('load_watts')?.entity_id || '';
+    const inverterEid = sensorState('calculated_watts')?.entity_id || '';
 
     // ---- Switch & Select ----
-    const managerObj = ibepSwitchState(hass, base, 'ibediv') || ibepSwitchState(hass, base, 'switch_on_off');
+    const managerObj = switchState('ibediv', 'switch_on_off');
     const managerEid = ibepSwitchEid(hass, base, 'ibediv') || ibepSwitchEid(hass, base, 'switch_on_off');
     const managerOn  = managerObj?.state === 'on';
 
-    const modeObj = ibepSelectState(hass, base, 'modo_de_trabajo') || ibepSelectState(hass, base, 'work_mode_select');
+    const modeObj = selectState('modo_de_trabajo', 'work_mode_select');
     const modeEid = ibepSelectEid(hass, base, 'modo_de_trabajo') || ibepSelectEid(hass, base, 'work_mode_select');
     const uiMode  = this._resolveUiMode(base, managerOn, modeObj);
     const isManual = uiMode === 'MANUAL';
 
     const pwmSetEid = ibepNumberEid(hass, base, 'manual') || ibepNumberEid(hass, base, 'pwm_value_setter');
-    const pwmSetObj = ibepNumberState(hass, base, 'manual') || ibepNumberState(hass, base, 'pwm_value_setter');
+    const pwmSetObj = numberState('manual', 'pwm_value_setter');
     const pwmSetVal = Math.max(0, Math.min(100, Math.round(ibepNum(pwmSetObj) ?? 0)));
 
     // ---- PV Strings ----
     const buildPvPill = (label, key) => {
-      const vObj = ibepState(hass, base, key + '_voltage');
-      const aObj = ibepState(hass, base, key + '_current');
-      const wObj = ibepState(hass, base, key + '_power');
+      const vObj = sensorState(key + '_voltage');
+      const aObj = sensorState(key + '_current');
+      const wObj = sensorState(key + '_power');
       const metric = (obj, digits, unit) => {
         if (!ibepValid(obj)) return '';
         const v = ibepNum(obj);
@@ -1512,10 +1682,10 @@ class IbepowerIbedivCard extends HTMLElement {
       const v = ibepNum(obj);
       return v !== null ? v.toFixed(1) + '°C' : '-- °C';
     };
-    const thermoNameObj = ibepState(hass, base, 'thermo_sensor_name');
+    const thermoNameObj = sensorState('thermo_sensor_name');
     const thermoNameRaw = ibepValid(thermoNameObj) ? String(thermoNameObj.state).trim() : '';
     const thermoLabel   = thermoNameRaw || t.thermo;
-    const customNameObj = ibepState(hass, base, 'custom_sensor_name');
+    const customNameObj = sensorState('custom_sensor_name');
     const customNameRaw = ibepValid(customNameObj) ? String(customNameObj.state).trim() : '';
     const customLabel   = customNameRaw || t.custom;
     const tempDefs = [
@@ -1527,7 +1697,7 @@ class IbepowerIbedivCard extends HTMLElement {
     ];
     const tempPills = [];
     for (const d of tempDefs) {
-      const obj = ibepState(hass, base, d.key);
+      const obj = sensorState(d.key);
       if (!ibepValid(obj)) continue;
       const eid = obj.entity_id || '';
       tempPills.push(`<div class="temp-pill" data-entity="${eid}"><span class="temp-title">${d.label}</span><span class="temp-val" data-v="temp-${d.key}">${fmtTemp(obj)}</span></div>`);
@@ -1553,8 +1723,8 @@ class IbepowerIbedivCard extends HTMLElement {
     }
 
     // ---- Incremental update: skip full re-render if structure unchanged ----
-    const tempKeysStr = tempDefs.filter(d => ibepValid(ibepState(hass, base, d.key))).map(d => d.key).join(',');
-    const pvSig = ['pv1','pv2'].map(k => [ibepValid(ibepState(hass,base,k+'_voltage')),ibepValid(ibepState(hass,base,k+'_current')),ibepValid(ibepState(hass,base,k+'_power'))].join('')).join('|');
+    const tempKeysStr = tempDefs.filter(d => ibepValid(sensorState(d.key))).map(d => d.key).join(',');
+    const pvSig = ['pv1','pv2'].map(k => [ibepValid(sensorState(k+'_voltage')),ibepValid(sensorState(k+'_current')),ibepValid(sensorState(k+'_power'))].join('')).join('|');
     const structKey = [slugs.join(','),base,hasSolar,hasGrid,hasBatt,hasBatteryPower,hasBatterySoc,hasDiverter,hasPwm,compact,isManual,!!pwmSetEid,!!modeObj,hasAnyInverter,hasSolarToday,hasImportToday,hasExportToday,hasDiverterToday,hasHome,managerOn,layoutClass,tempKeysStr,pvSig].join('|');
     if (this._structKey === structKey && this.shadowRoot.querySelector('.flow-wrap')) {
       const sr = this.shadowRoot;
@@ -1611,13 +1781,13 @@ class IbepowerIbedivCard extends HTMLElement {
         const fMap = {v:['voltage',1],a:['current',1],w:['power',0]};
         Object.entries(fMap).forEach(([u,[field,digits]]) => {
           const el = q(`[data-v="${k}-${u}"]`);
-          if (el) { const obj = ibepState(hass,base,k+'_'+field); el.textContent = ibepValid(obj) ? (ibepNum(obj)?.toFixed(digits) ?? '--') : '--'; }
+          if (el) { const obj = sensorState(k + '_' + field); el.textContent = ibepValid(obj) ? (ibepNum(obj)?.toFixed(digits) ?? '--') : '--'; }
         });
       });
       // Temperature values
       tempDefs.forEach(d => {
         const el = q(`[data-v="temp-${d.key}"]`);
-        if (el) { const obj = ibepState(hass, base, d.key); el.textContent = fmtTemp(obj); }
+        if (el) { const obj = sensorState(d.key); el.textContent = fmtTemp(obj); }
       });
       // Controls
       const mgr = sr.getElementById('manager-toggle');
