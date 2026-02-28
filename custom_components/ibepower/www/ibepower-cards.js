@@ -2187,3 +2187,33 @@ window.customCards.push(
 );
 
 console.info(`%c IBEPOWER CARDS %c v${IBEP_CARD_VERSION} `, 'background:#2e7d32;color:#fff;font-weight:700;', 'background:#1b5e20;color:#4cdf6b;font-weight:700;');
+
+// ---------------------------------------------------------------------------
+// Self-healing: if Lovelace rendered cards before this script finished
+// loading, HA shows hui-error-card. Once our elements are registered we
+// walk the shadow DOM and dispatch "ll-rebuild" so HA retries them
+// automatically — no manual F5 needed.
+// ---------------------------------------------------------------------------
+(function () {
+  const IBEP_TAGS = [
+    'ibepower-ibeplug-card',
+    'ibepower-ibemeter-card',
+    'ibepower-ibediv-card',
+  ];
+
+  function ibepRebuildErrors(root) {
+    if (!root) return;
+    root.querySelectorAll('hui-error-card').forEach(el => {
+      el.dispatchEvent(new Event('ll-rebuild', { bubbles: true, composed: true }));
+    });
+    root.querySelectorAll('*').forEach(el => {
+      if (el.shadowRoot) ibepRebuildErrors(el.shadowRoot);
+    });
+  }
+
+  Promise.all(IBEP_TAGS.map(t => customElements.whenDefined(t))).then(() => {
+    requestAnimationFrame(() => {
+      setTimeout(() => ibepRebuildErrors(document.documentElement), 500);
+    });
+  });
+})();
