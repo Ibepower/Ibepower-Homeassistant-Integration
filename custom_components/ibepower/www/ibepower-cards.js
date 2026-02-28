@@ -1557,6 +1557,7 @@ class IbepowerIbedivCard extends HTMLElement {
       return stickyCache[key] || stateObjs.find(Boolean) || null;
     };
     const sensorState = field => keepSticky('sensor:' + field, ibepState(hass, base, field));
+    const liveSensorState = field => ibepState(hass, base, field);
     const switchState = (...suffixes) => pickSticky('switch:' + suffixes.join('|'), suffixes.map(suffix => ibepSwitchState(hass, base, suffix)));
     const selectState = (...fields) => pickSticky('select:' + fields.join('|'), fields.map(field => ibepSelectState(hass, base, field)));
     const numberState = (...fields) => pickSticky('number:' + fields.join('|'), fields.map(field => ibepNumberState(hass, base, field)));
@@ -1682,10 +1683,10 @@ class IbepowerIbedivCard extends HTMLElement {
       const v = ibepNum(obj);
       return v !== null ? v.toFixed(1) + '°C' : '-- °C';
     };
-    const thermoNameObj = sensorState('thermo_sensor_name');
+    const thermoNameObj = liveSensorState('thermo_sensor_name');
     const thermoNameRaw = ibepValid(thermoNameObj) ? String(thermoNameObj.state).trim() : '';
     const thermoLabel   = thermoNameRaw || t.thermo;
-    const customNameObj = sensorState('custom_sensor_name');
+    const customNameObj = liveSensorState('custom_sensor_name');
     const customNameRaw = ibepValid(customNameObj) ? String(customNameObj.state).trim() : '';
     const customLabel   = customNameRaw || t.custom;
     const tempDefs = [
@@ -1723,9 +1724,12 @@ class IbepowerIbedivCard extends HTMLElement {
     }
 
     // ---- Incremental update: skip full re-render if structure unchanged ----
-    const tempKeysStr = tempDefs.filter(d => ibepValid(sensorState(d.key))).map(d => d.key).join(',');
+    const tempSig = tempDefs
+      .filter(d => ibepValid(sensorState(d.key)))
+      .map(d => `${d.key}:${d.label}`)
+      .join(',');
     const pvSig = ['pv1','pv2'].map(k => [ibepValid(sensorState(k+'_voltage')),ibepValid(sensorState(k+'_current')),ibepValid(sensorState(k+'_power'))].join('')).join('|');
-    const structKey = [slugs.join(','),base,hasSolar,hasGrid,hasBatt,hasBatteryPower,hasBatterySoc,hasDiverter,hasPwm,compact,isManual,!!pwmSetEid,!!modeObj,hasAnyInverter,hasSolarToday,hasImportToday,hasExportToday,hasDiverterToday,hasHome,managerOn,layoutClass,tempKeysStr,pvSig].join('|');
+    const structKey = [slugs.join(','),base,hasSolar,hasGrid,hasBatt,hasBatteryPower,hasBatterySoc,hasDiverter,hasPwm,compact,isManual,!!pwmSetEid,!!modeObj,hasAnyInverter,hasSolarToday,hasImportToday,hasExportToday,hasDiverterToday,hasHome,managerOn,layoutClass,tempSig,pvSig].join('|');
     if (this._structKey === structKey && this.shadowRoot.querySelector('.flow-wrap')) {
       const sr = this.shadowRoot;
       const q = s => sr.querySelector(s);
