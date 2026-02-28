@@ -24,7 +24,7 @@ CARD_JS_FILE = "ibepower-cards.js"
 
 
 class _IbepowerStaticView(HomeAssistantView):
-    """Serve bundled assets with explicit no-cache headers."""
+    """Serve bundled assets with cache-friendly headers."""
 
     requires_auth = False
     url = STATIC_URL_BASE + "/{path:.+}"
@@ -35,13 +35,13 @@ class _IbepowerStaticView(HomeAssistantView):
         fpath = (STATIC_DIR_PATH / path).resolve()
         if not fpath.is_relative_to(base) or not fpath.is_file():
             raise web.HTTPNotFound()
-        return web.FileResponse(
-            fpath,
-            headers={
-                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-                "Pragma": "no-cache",
-            },
-        )
+        # JS files already have an mtime-based cache buster in the URL,
+        # so a short max-age is fine.  Images rarely change; cache longer.
+        if fpath.suffix == '.js':
+            cache = "public, max-age=3600"
+        else:
+            cache = "public, max-age=86400"
+        return web.FileResponse(fpath, headers={"Cache-Control": cache})
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:

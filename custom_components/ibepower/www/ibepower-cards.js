@@ -1729,7 +1729,7 @@ class IbepowerIbedivCard extends HTMLElement {
       .map(d => `${d.key}:${d.label}`)
       .join(',');
     const pvSig = ['pv1','pv2'].map(k => [ibepValid(sensorState(k+'_voltage')),ibepValid(sensorState(k+'_current')),ibepValid(sensorState(k+'_power'))].join('')).join('|');
-    const structKey = [slugs.join(','),base,hasSolar,hasGrid,hasBatt,hasBatteryPower,hasBatterySoc,hasDiverter,hasPwm,compact,isManual,!!pwmSetEid,!!modeObj,hasAnyInverter,hasSolarToday,hasImportToday,hasExportToday,hasDiverterToday,hasHome,managerOn,layoutClass,tempSig,pvSig].join('|');
+    const structKey = [slugs.join(','),base,hasSolar,hasGrid,hasBatt,hasBatteryPower,hasBatterySoc,hasDiverter,hasPwm,compact,!!pwmSetEid,!!modeObj,hasAnyInverter,hasSolarToday,hasImportToday,hasExportToday,hasDiverterToday,hasHome,layoutClass,tempSig,pvSig].join('|');
     if (this._structKey === structKey && this.shadowRoot.querySelector('.flow-wrap')) {
       const sr = this.shadowRoot;
       const q = s => sr.querySelector(s);
@@ -1798,7 +1798,9 @@ class IbepowerIbedivCard extends HTMLElement {
       if (mgr) { mgr.className = 'ctrl-card ' + (managerOn ? 'ctrl-manager-on' : 'ctrl-manager-off'); const s = mgr.querySelector('.ctrl-state'); if (s) s.textContent = managerOn ? t.on : t.off; }
       const mode = sr.getElementById('mode-toggle');
       if (mode) { mode.className = 'ctrl-card ' + modeClass; const s = mode.querySelector('.ctrl-state'); if (s) s.textContent = isManual ? t.manual : t.auto; }
-      // PWM slider (skip if user is dragging or just released)
+      // PWM slider visibility + value (skip value update if user is dragging)
+      const sliderSec = sr.getElementById('pwm-section');
+      if (sliderSec) sliderSec.style.display = (isManual && pwmSetEid) ? '' : 'none';
       if (!this._isSliderBusy()) {
         const sl = sr.getElementById('pwm-slider');
         const dp = sr.getElementById('pwm-display');
@@ -1914,9 +1916,9 @@ class IbepowerIbedivCard extends HTMLElement {
             </div>` : ''}
           </div>
 
-          <!-- PWM slider (only in manual mode) -->
-          ${isManual && pwmSetEid ? `
-          <div class="slider-section">
+          <!-- PWM slider (shown only in manual mode) -->
+          ${pwmSetEid ? `
+          <div class="slider-section" id="pwm-section" style="${isManual ? '' : 'display:none'}">
             <div class="slider-wrap${managerOn ? '' : ' is-disabled'}" style="--ibep-pct:${pwmSetVal}%;">
               <input class="slider-input" type="range" min="0" max="100" step="1" value="${pwmSetVal}" id="pwm-slider" ${managerOn ? '' : 'disabled'}>
               <div class="slider-overlay"><span class="slider-value" id="pwm-display">${pwmSetVal}%</span></div>
@@ -1935,24 +1937,33 @@ class IbepowerIbedivCard extends HTMLElement {
       });
     });
 
-    // Manager toggle
+    // Manager toggle — reads live state to avoid stale closures
     this.shadowRoot.getElementById('manager-toggle')?.addEventListener('click', () => {
-      if (managerEid) hass.callService('switch', 'toggle', { entity_id: managerEid });
+      const h = this._hass;
+      if (!h) return;
+      const eid = ibepSwitchEid(h, base, 'ibediv') || ibepSwitchEid(h, base, 'switch_on_off');
+      if (eid) h.callService('switch', 'toggle', { entity_id: eid });
     });
 
-    // Mode toggle
+    // Mode toggle — reads live state & resolved UI mode to avoid stale closures
     this.shadowRoot.getElementById('mode-toggle')?.addEventListener('click', () => {
-      if (!managerOn || !modeEid || !modeObj) return;
-      const opts = modeObj.attributes?.options || [];
-      const raw = String(modeObj.state ?? '').toUpperCase();
-      const target = raw.startsWith('MAN') ? 'AUTO' : 'MANUAL';
+      const h = this._hass;
+      if (!h) return;
+      const mgrObj = ibepSwitchState(h, base, 'ibediv') || ibepSwitchState(h, base, 'switch_on_off');
+      if (mgrObj?.state !== 'on') return;
+      const mObj = ibepSelectState(h, base, 'modo_de_trabajo') || ibepSelectState(h, base, 'work_mode_select');
+      const mEid = ibepSelectEid(h, base, 'modo_de_trabajo') || ibepSelectEid(h, base, 'work_mode_select');
+      if (!mEid || !mObj) return;
+      const currentUiMode = this._resolveUiMode(base, true, mObj);
+      const target = currentUiMode === 'MANUAL' ? 'AUTO' : 'MANUAL';
       try {
         localStorage.setItem('ibepower_ui_mode_' + base, target);
         localStorage.setItem('ibepower_mgr_toggle_ts_' + base, '0');
         localStorage.setItem('ibepower_mode_toggle_ts_' + base, String(Date.now()));
       } catch(e) {}
+      const opts = mObj.attributes?.options || [];
       const match = opts.find(o => o.toUpperCase() === target);
-      if (match) hass.callService('select', 'select_option', { entity_id: modeEid, option: match });
+      if (match) h.callService('select', 'select_option', { entity_id: mEid, option: match });
     });
 
     // PWM slider
