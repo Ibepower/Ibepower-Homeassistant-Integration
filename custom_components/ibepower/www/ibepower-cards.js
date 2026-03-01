@@ -814,6 +814,7 @@ const IBEMETER_CSS = `
     overflow: hidden;
     background: rgba(10, 18, 28, 0.35);
     border: 1px solid rgba(255, 255, 255, 0.10);
+    container-type: inline-size;
   }
   .flow-wrap {
     position: relative;
@@ -868,12 +869,12 @@ const IBEMETER_CSS = `
   /* ---- Circle nodes (absolute positioned) ---- */
   .ibep-flow-node {
     position: absolute; z-index: 3;
-    width: min(130px, 28%); height: min(130px, 28%);
+    width: min(142px, 31%); height: min(142px, 31%);
     transform: translate(-50%, -50%);
     border-radius: 50%;
-    display: grid; grid-template-rows: 20px minmax(0, auto) minmax(0, auto);
+    display: grid; grid-template-rows: 24px minmax(0, auto) minmax(0, auto);
     align-content: center; justify-items: center; align-items: center;
-    text-align: center; padding: 8px 9px 10px; box-sizing: border-box;
+    text-align: center; padding: 6px 6px 8px; box-sizing: border-box;
     border: 2px solid var(--node-accent, #9aa5b8);
     background: rgba(255, 255, 255, 0.88);
     backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
@@ -885,29 +886,30 @@ const IBEMETER_CSS = `
   .node-solar { top: 20%; left: 20%; --node-accent: #d8b548; --node-main: #8a6d00; }
   .node-grid  { top: 20%; left: 80%; --node-accent: #8660ce; --node-main: #5a3d9e; }
   .node-home  { top: 65%; left: 50%; --node-accent: #2f6fe8; --node-main: #1a56b0; }
-  .node-home .node-sub { margin-top: 6px; }
+  .node-home .node-sub { margin-top: 4px; }
   .node-icon {
-    color: var(--node-accent, #7e8aa0); --mdc-icon-size: 26px;
+    color: var(--node-accent, #7e8aa0); --mdc-icon-size: 30px;
     margin: 0; align-self: center; justify-self: center;
   }
   .node-main {
     color: var(--node-main, #2c3447); width: 100%; max-width: 100%;
-    font-size: clamp(1.08rem, 3.25vw, 1.46rem); font-weight: 700;
-    line-height: 1.02; margin-top: 3px;
+    font-size: clamp(0.78rem, 4.2cqi, 1.52rem); font-weight: 700;
+    line-height: 1.02; margin-top: 5px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .node-main.is-negative { color: #c0392b; }
   .node-sub {
-    margin-top: 2px; font-size: clamp(0.60rem, 1.85vw, 0.80rem);
+    margin-top: 1px; font-size: clamp(0.46rem, 2.4cqi, 0.84rem);
     font-weight: 600; line-height: 1.07; color: rgba(0, 0, 0, 0.6);
     width: 100%; max-width: 100%;
   }
-  .node-sub-line:first-child { margin-bottom: 3px; }
+  .node-sub-line:first-child { margin-bottom: 1px; }
   .node-sub-line {
     display: block; width: 100%; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap;
   }
-  .node-sub-title { font-weight: 700; color: var(--node-accent, #7e8aa0); }
+  .node-sub-title { font-weight: 700; color: var(--node-accent, #7e8aa0); margin-top: 3px; }
+  .node-solar .node-sub-title { color: #9a7a10; }
   /* ---- Animations ---- */
   @keyframes flowRight { 0%{background-position:0 0} 100%{background-position:24px 0} }
   @keyframes flowLeft  { 0%{background-position:0 0} 100%{background-position:-24px 0} }
@@ -918,18 +920,18 @@ const IBEMETER_CSS = `
   @media (max-width: 540px) {
     .flow-viewport { width: 100%; min-height: 0; }
     .flow-wrap { width: 100%; min-height: 0; }
-    .ibep-flow-node { width: min(112px, 29%); height: min(112px, 29%); grid-template-rows: 21px minmax(0,auto) minmax(0,auto); padding: 6px 8px 8px; }
-    .node-icon { --mdc-icon-size: 22px; }
+    .ibep-flow-node { width: min(124px, 32%); height: min(124px, 32%); grid-template-rows: 22px minmax(0,auto) minmax(0,auto); padding: 5px 6px 7px; }
+    .node-icon { --mdc-icon-size: 26px; }
   }
   .card.compact .ibep-flow-node {
-    width: min(104px, 30%);
-    height: min(104px, 30%);
-    grid-template-rows: 16px minmax(0,auto) minmax(0,auto);
-    padding: 5px 6px 7px;
+    width: min(112px, 32%);
+    height: min(112px, 32%);
+    grid-template-rows: 18px minmax(0,auto) minmax(0,auto);
+    padding: 4px 5px 6px;
   }
-  .card.compact .node-icon { --mdc-icon-size: 17px; }
-  .card.compact .node-main { font-size: clamp(0.62rem, 2vw, 0.86rem); margin-top: 1px; }
-  .card.compact .node-sub { font-size: clamp(0.39rem, 1.1vw, 0.50rem); line-height: 1.02; margin-top: 1px; }
+  .card.compact .node-icon { --mdc-icon-size: 20px; }
+  .card.compact .node-main { font-size: clamp(0.56rem, 3.2cqi, 0.92rem); margin-top: 1px; }
+  .card.compact .node-sub { font-size: clamp(0.38rem, 1.7cqi, 0.54rem); line-height: 1.02; margin-top: 1px; }
   .card.compact .node-home .node-sub { margin-top: 2px; }
 `;
 
@@ -1162,6 +1164,7 @@ const IBEDIV_CSS = `
     background: rgba(10, 18, 28, 0.35);
     border: 1px solid rgba(255, 255, 255, 0.10);
     --ox: 0%;
+    container-type: inline-size;
   }
   .flow-wrap.layout-no-batt { --ox: -16.5%; }
   .flow-wrap.layout-no-grid { --ox: 16.5%; }
@@ -1211,12 +1214,12 @@ const IBEDIV_CSS = `
   /* ---- Diamond nodes (absolute) ---- */
   .ibep-flow-node {
     position: absolute; z-index: 3;
-    width: min(130px, 28%); height: min(130px, 28%);
+    width: min(142px, 31%); height: min(142px, 31%);
     transform: translate(-50%, -50%);
     border-radius: 50%;
-    display: grid; grid-template-rows: 20px minmax(0,auto) minmax(0,auto);
+    display: grid; grid-template-rows: 24px minmax(0,auto) minmax(0,auto);
     align-content: center; justify-items: center; align-items: center;
-    text-align: center; padding: 8px 9px 10px; box-sizing: border-box;
+    text-align: center; padding: 6px 6px 8px; box-sizing: border-box;
     border: 2px solid var(--node-accent, #9aa5b8);
     background: rgba(255,255,255,0.88);
     backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
@@ -1231,29 +1234,30 @@ const IBEDIV_CSS = `
   .node-home     { top: 83%; left: calc(50% + var(--ox)); --node-accent: #2f6fe8; --node-main: #1a56b0; }
   .node-diverter {
     z-index: 2; top: 50%; left: calc(50% + var(--ox));
-    width: min(122px, 26%); height: min(122px, 26%);
+    width: min(134px, 29%); height: min(134px, 29%);
     --node-accent: #7a8ea0; --node-main: #4a5568;
   }
   .node-diverter.node-active { animation: nodeGlow 3s ease-in-out infinite; }
-  .node-icon { color: var(--node-accent, #7e8aa0); --mdc-icon-size: 26px; margin: 0; align-self: center; justify-self: center; }
+  .node-icon { color: var(--node-accent, #7e8aa0); --mdc-icon-size: 30px; margin: 0; align-self: center; justify-self: center; }
   .node-icon-rotated { transform: rotate(90deg); }
   .node-main {
     color: var(--node-main, #2c3447); width: 100%; max-width: 100%;
-    font-size: clamp(1.06rem, 3.2vw, 1.42rem); font-weight: 700;
-    line-height: 1.02; margin-top: 3px;
+    font-size: clamp(0.78rem, 4.2cqi, 1.52rem); font-weight: 700;
+    line-height: 1.02; margin-top: 5px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .node-main.is-negative { color: #c0392b; }
-  .node-diverter .node-main { font-size: clamp(1.14rem, 3.35vw, 1.52rem); }
-  .node-sub-top { margin-top: 0; margin-bottom: 1px; font-size: clamp(0.70rem, 2.15vw, 0.92rem) !important; font-weight: 700; }
+  .node-diverter .node-main { font-size: clamp(0.82rem, 4.4cqi, 1.62rem); }
+  .node-sub-top { margin-top: 0; margin-bottom: 0; font-size: clamp(0.54rem, 2.8cqi, 0.96rem) !important; font-weight: 700; }
   .node-sub {
-    margin-top: 2px; font-size: clamp(0.60rem, 1.82vw, 0.80rem);
+    margin-top: 1px; font-size: clamp(0.46rem, 2.4cqi, 0.84rem);
     font-weight: 600; line-height: 1.07; color: rgba(0,0,0,0.6);
     width: 100%; max-width: 100%;
   }
-  .node-sub-line:first-child { margin-bottom: 3px; }
+  .node-sub-line:first-child { margin-bottom: 1px; }
   .node-sub-line { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .node-sub-title { font-weight: 700; color: var(--node-accent, #7e8aa0); }
+  .node-sub-title { font-weight: 700; color: var(--node-accent, #7e8aa0); margin-top: 3px; }
+  .node-solar .node-sub-title { color: #9a7a10; }
   .node-sub-spaced { margin-top: 3px; }
   .node-soc { color: #1e7a34; }
 
@@ -1390,25 +1394,25 @@ const IBEDIV_CSS = `
   /* ---- Responsive ---- */
   @media (max-width: 540px) {
     .flow-wrap { width: 100%; min-height: 0; }
-    .ibep-flow-node { width: min(112px, 29%); height: min(112px, 29%); grid-template-rows: 21px minmax(0,auto) minmax(0,auto); padding: 6px 8px 8px; }
-    .node-diverter  { width: min(106px, 27%); height: min(106px, 27%); }
-    .node-icon { --mdc-icon-size: 22px; }
+    .ibep-flow-node { width: min(124px, 32%); height: min(124px, 32%); grid-template-rows: 22px minmax(0,auto) minmax(0,auto); padding: 5px 6px 7px; }
+    .node-diverter  { width: min(116px, 29%); height: min(116px, 29%); }
+    .node-icon { --mdc-icon-size: 26px; }
   }
   .card.compact .ibep-flow-node {
-    width: min(102px, 30%);
-    height: min(102px, 30%);
-    grid-template-rows: 16px minmax(0,auto) minmax(0,auto);
-    padding: 5px 6px 7px;
+    width: min(112px, 32%);
+    height: min(112px, 32%);
+    grid-template-rows: 18px minmax(0,auto) minmax(0,auto);
+    padding: 4px 5px 6px;
   }
   .card.compact .node-diverter {
-    width: min(94px, 27%);
-    height: min(94px, 27%);
+    width: min(104px, 29%);
+    height: min(104px, 29%);
   }
-  .card.compact .node-icon { --mdc-icon-size: 17px; }
-  .card.compact .node-main { font-size: clamp(0.60rem, 1.95vw, 0.82rem); margin-top: 1px; }
-  .card.compact .node-diverter .node-main { font-size: clamp(0.62rem, 2.0vw, 0.86rem); }
-  .card.compact .node-sub-top { font-size: clamp(0.42rem, 1.1vw, 0.56rem) !important; }
-  .card.compact .node-sub { font-size: clamp(0.38rem, 1.05vw, 0.48rem); line-height: 1.02; margin-top: 1px; }
+  .card.compact .node-icon { --mdc-icon-size: 20px; }
+  .card.compact .node-main { font-size: clamp(0.56rem, 3.2cqi, 0.88rem); margin-top: 1px; }
+  .card.compact .node-diverter .node-main { font-size: clamp(0.58rem, 3.4cqi, 0.92rem); }
+  .card.compact .node-sub-top { font-size: clamp(0.40rem, 1.8cqi, 0.60rem) !important; }
+  .card.compact .node-sub { font-size: clamp(0.38rem, 1.6cqi, 0.52rem); line-height: 1.02; margin-top: 1px; }
   .card.compact .pv-wrap { gap: 6px; }
   .card.compact .pv-pill { padding: 3px 5px; border-radius: 8px; }
   .card.compact .pv-title { font-size: 0.56rem; }
@@ -1483,9 +1487,9 @@ class IbepowerIbedivCard extends HTMLElement {
     const raw = String(hass?.language || hass?.selectedLanguage || hass?.locale?.language || bl || 'en').toLowerCase();
     const lang = raw.startsWith('es') ? 'es' : raw.startsWith('pt') ? 'pt' : 'en';
     const ext = {
-      es: { charging:'Cargando', discharging:'Descargando', diverterToday:'Derivado Hoy', inverter:'Inversor', custom:'Personalizado', thermo:'Termo' },
-      en: { charging:'Charging', discharging:'Discharging', diverterToday:'Diverted Today', inverter:'Inverter', custom:'Custom', thermo:'Thermo' },
-      pt: { charging:'Carregando', discharging:'Descarregando', diverterToday:'Derivado Hoje', inverter:'Inversor', custom:'Personalizado', thermo:'Termo' },
+      es: { charging:'Cargando', discharging:'Descargando', diverterToday:'Derivado Hoy', generatedToday:'Generado Hoy', inverter:'Inversor', custom:'Personalizado', thermo:'Termo' },
+      en: { charging:'Charging', discharging:'Discharging', diverterToday:'Diverted Today', generatedToday:'Generated Today', inverter:'Inverter', custom:'Custom', thermo:'Thermo' },
+      pt: { charging:'Carregando', discharging:'Descarregando', diverterToday:'Derivado Hoje', generatedToday:'Gerado Hoje', inverter:'Inversor', custom:'Personalizado', thermo:'Termo' },
     };
     return { ...base, ...(ext[lang] || ext.en) };
   }
@@ -1568,7 +1572,12 @@ class IbepowerIbedivCard extends HTMLElement {
     const loadW    = ibepNum(sensorState('load_watts'));
     const batteryW = ibepNum(sensorState('battery_power'));
     const batterySoc = ibepNum(sensorState('battery_soc'));
+    const batteryV = ibepNum(sensorState('battery_voltage'));
+    const batteryA = ibepNum(sensorState('battery_current'));
     const diverterW = ibepNum(sensorState('calculated_watts'));
+    const gridV    = ibepNum(sensorState('grid_voltage'));
+    const gridA    = ibepNum(sensorState('grid_current'));
+    const gridHz   = ibepNum(sensorState('grid_frequency'));
     const pwmRaw   = ibepNum(sensorState('pwm_value'));
     const pwmPct   = pwmRaw !== null ? Math.round(Math.max(0, Math.min(100, pwmRaw))) : null;
     const pwmText  = pwmPct !== null ? (pwmPct + ' %') : '-- %';
@@ -1584,7 +1593,12 @@ class IbepowerIbedivCard extends HTMLElement {
     const hasHome         = ibepValid(sensorState('load_watts'));
     const hasBatteryPower = ibepValid(sensorState('battery_power'));
     const hasBatterySoc   = ibepValid(sensorState('battery_soc'));
+    const hasBatteryV     = ibepValid(sensorState('battery_voltage'));
+    const hasBatteryA     = ibepValid(sensorState('battery_current'));
     const hasDiverter     = ibepValid(sensorState('calculated_watts'));
+    const hasGridV        = ibepValid(sensorState('grid_voltage'));
+    const hasGridA        = ibepValid(sensorState('grid_current'));
+    const hasGridHz       = ibepValid(sensorState('grid_frequency'));
     const hasPwm          = ibepValid(sensorState('pwm_value'));
     const hasSolarToday   = ibepValid(sensorState('kw_solar_today'));
     const hasImportToday  = ibepValid(sensorState('kw_import_today'));
@@ -1636,6 +1650,9 @@ class IbepowerIbedivCard extends HTMLElement {
     const batteryDirText = hasBatteryPower ? ((batteryW ?? 0) >= 0 ? t.charging : t.discharging) : '';
     const gridDirText    = hasGrid ? ((gridW ?? 0) >= 0 ? t.exporting : t.importing) : '';
     const batterySocText = hasBatterySoc ? ('SoC ' + Math.round(batterySoc ?? 0) + ' %') : '';
+    const batteryVAText  = (hasBatteryV || hasBatteryA)
+      ? (batteryV !== null ? batteryV.toFixed(1) : '--') + ' V (' + (batteryA !== null ? batteryA.toFixed(1) : '--') + ' A)'
+      : '';
 
     // ---- Entity IDs for more-info ----
     const solarEid    = sensorState('solar_watts')?.entity_id || '';
@@ -1729,7 +1746,7 @@ class IbepowerIbedivCard extends HTMLElement {
       .map(d => `${d.key}:${d.label}`)
       .join(',');
     const pvSig = ['pv1','pv2'].map(k => [ibepValid(sensorState(k+'_voltage')),ibepValid(sensorState(k+'_current')),ibepValid(sensorState(k+'_power'))].join('')).join('|');
-    const structKey = [slugs.join(','),base,hasSolar,hasGrid,hasBatt,hasBatteryPower,hasBatterySoc,hasDiverter,hasPwm,compact,!!pwmSetEid,!!modeObj,hasAnyInverter,hasSolarToday,hasImportToday,hasExportToday,hasDiverterToday,hasHome,layoutClass,tempSig,pvSig].join('|');
+    const structKey = [slugs.join(','),base,hasSolar,hasGrid,hasBatt,hasBatteryPower,hasBatterySoc,hasBatteryV,hasBatteryA,hasDiverter,hasPwm,compact,!!pwmSetEid,!!modeObj,hasAnyInverter,hasSolarToday,hasImportToday,hasExportToday,hasDiverterToday,hasHome,hasGridV,hasGridA,hasGridHz,layoutClass,tempSig,pvSig].join('|');
     if (this._structKey === structKey && this.shadowRoot.querySelector('.flow-wrap')) {
       const sr = this.shadowRoot;
       const q = s => sr.querySelector(s);
@@ -1746,6 +1763,10 @@ class IbepowerIbedivCard extends HTMLElement {
       patchNode('.node-grid', gridActive, fmtSignW(gridW), (gridW ?? 0) < 0);
       patchNode('.node-home', homeActive, fmtAbsW(effectiveLoadW));
       patchNode('.node-diverter', inverterActive, fmtAbsW(inverterW));
+      // Inverter grid metrics
+      const setText3 = (s, txt) => { const e = q(s); if (e) e.textContent = txt; };
+      setText3('[data-v="inv-grid-va"]', (gridV !== null ? gridV.toFixed(1) : '--') + ' V (' + (gridA !== null ? gridA.toFixed(1) : '--') + ' A)');
+      setText3('[data-v="inv-grid-hz"]', gridHz !== null ? gridHz.toFixed(2) + ' Hz' : '-- Hz');
       // Battery node
       const battNode = q('.node-battery');
       if (battNode) {
@@ -1757,6 +1778,7 @@ class IbepowerIbedivCard extends HTMLElement {
         if (bi) { bi.setAttribute('icon', battIcon); bi.style.color = battColor; }
         const setText2 = (s, txt) => { const e = battNode.querySelector(s); if (e) e.textContent = txt; };
         setText2('[data-v="batt-dir"]', batteryDirText);
+        setText2('[data-v="batt-va"]', batteryVAText);
         setText2('[data-v="batt-soc"]', batterySocText);
       }
       // Grid sub text
@@ -1766,7 +1788,10 @@ class IbepowerIbedivCard extends HTMLElement {
       setText('[data-v="div-export-today"]', t.exp + '. ' + ibepFmtK(exportK));
       // Solar today
       const solarSub = q('.node-solar .node-sub');
-      if (solarSub && hasSolarToday && !compact) solarSub.textContent = ibepFmtK(solarK);
+      if (solarSub && hasSolarToday && !compact) {
+        const valEl = solarSub.querySelector('[data-v="solar-today"]');
+        if (valEl) valEl.textContent = ibepFmtK(solarK);
+      }
       // Home sub (small innerHTML, won't cause reflow)
       const homeSub = q('.node-home .node-sub');
       if (homeSub) homeSub.innerHTML = homeSubHtml;
@@ -1839,7 +1864,7 @@ class IbepowerIbedivCard extends HTMLElement {
         <div class="ibep-flow-node node-solar ${solarActive?'node-active':'node-idle'}" data-entity="${solarEid}" style="${_nDel}">
           <ha-icon class="node-icon" icon="mdi:solar-power"></ha-icon>
           <div class="node-main">${fmtAbsW(solarW)}</div>
-          ${hasSolarToday && !compact ? `<div class="node-sub">${ibepFmtK(solarK)}</div>` : ''}
+          ${hasSolarToday && !compact ? `<div class="node-sub"><span class="node-sub-line node-sub-title node-sub-spaced">${t.generatedToday}</span><span class="node-sub-line" data-v="solar-today">${ibepFmtK(solarK)}</span></div>` : ''}
         </div>`;
     }
     if (hasBatt) {
@@ -1850,7 +1875,7 @@ class IbepowerIbedivCard extends HTMLElement {
           <div class="node-sub">
             ${compact
               ? (batterySocText ? `<span class="node-sub-line node-soc" data-v="batt-soc">${batterySocText}</span>` : '')
-              : (batteryDirText ? `<span class="node-sub-line node-sub-title" data-v="batt-dir">${batteryDirText}</span>` : '') + (batterySocText ? `<span class="node-sub-line node-soc" data-v="batt-soc">${batterySocText}</span>` : '')}
+              : (batteryDirText ? `<span class="node-sub-line node-sub-title" data-v="batt-dir">${batteryDirText}</span>` : '') + (batteryVAText ? `<span class="node-sub-line node-sub-spaced" data-v="batt-va">${batteryVAText}</span>` : '') + (batterySocText ? `<span class="node-sub-line node-soc node-sub-spaced" data-v="batt-soc">${batterySocText}</span>` : '')}
           </div>
         </div>`;
     }
@@ -1875,11 +1900,17 @@ class IbepowerIbedivCard extends HTMLElement {
 
     // Inverter center node
     if (hasAnyInverter) {
+      const hasInvMetrics = hasGridV || hasGridA || hasGridHz;
+      const invGridVAText = (hasGridV || hasGridA)
+        ? (gridV !== null ? gridV.toFixed(1) : '--') + ' V (' + (gridA !== null ? gridA.toFixed(1) : '--') + ' A)'
+        : '';
+      const invGridHzText = hasGridHz ? (gridHz !== null ? gridHz.toFixed(2) + ' Hz' : '-- Hz') : '';
       nodesHtml += `
         <div class="ibep-flow-node node-diverter ${inverterActive?'node-active':'node-idle'}" data-entity="${inverterEid}" style="${_nDel}">
           <ha-icon class="node-icon" icon="mdi:lightning-bolt"></ha-icon>
           <div class="node-sub node-sub-top">${compact ? '' : t.inverter}</div>
           <div class="node-main">${fmtAbsW(inverterW)}</div>
+          ${hasInvMetrics && !compact ? `<div class="node-sub">${invGridVAText ? `<span class="node-sub-line node-sub-spaced" data-v="inv-grid-va">${invGridVAText}</span>` : ''}${invGridHzText ? `<span class="node-sub-line" data-v="inv-grid-hz">${invGridHzText}</span>` : ''}</div>` : ''}
         </div>`;
     }
 
