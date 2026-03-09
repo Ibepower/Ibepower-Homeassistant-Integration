@@ -205,6 +205,17 @@ Alternatively, you can enable entities from **Settings > Devices & Services > En
 
 The integration ships with built-in Lovelace cards (`ibepower-cards.js`) that appear **automatically in the Home Assistant card picker** — no extra HACS frontend components needed.
 
+On dashboards managed in Home Assistant Storage mode, the integration auto-registers the cards as a Lovelace resource of type `module`.
+
+If your installation manages Lovelace resources in YAML, add this manually:
+
+```yaml
+lovelace:
+  resources:
+    - url: /ibepower_static/ibepower-cards.js
+      type: module
+```
+
 ### Available Cards
 
 | Card                  | Type tag                  | Description                                                                                             |
@@ -253,7 +264,7 @@ Example YAML card files are still available in `examples/lovelace/` for users wh
 
 - **Devices not being discovered**: Ensure your devices are connected to the same network as Home Assistant and that mDNS is enabled on your router.
 - **State changes delayed**: The integration polls devices every 10 seconds. If delays persist, check network connectivity to the device.
-- **Card not appearing in picker**: Restart Home Assistant after installing/updating the integration. The `ibepower-cards.js` file is registered automatically as a frontend module.
+- **Card not appearing in picker**: Restart Home Assistant after installing/updating the integration. In Storage mode the integration auto-registers `/ibepower_static/ibepower-cards.js` as a Lovelace `module` resource. In YAML mode you must declare that resource manually.
 - **Entities showing "unavailable"**: The device may be offline or its IP may have changed. Check the device page under **Settings > Devices & Services**.
 - **Hidden sensors not in card**: Enable them first (see [Enabling Hidden Entities](#enabling-hidden-entities)). The cards only show entities that exist and are enabled.
 - **Device errors**: Check the Home Assistant logs (**Settings > System > Logs**) for errors related to `ibepower`.

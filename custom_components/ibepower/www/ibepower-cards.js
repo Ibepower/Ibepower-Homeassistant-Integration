@@ -5,6 +5,9 @@
 // =============================================================================
 
 const IBEP_CARD_VERSION = '1.0.0';
+const IBEP_GLOBAL = typeof window !== 'undefined'
+  ? (window.__ibepowerCardsGlobal = window.__ibepowerCardsGlobal || {})
+  : {};
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -150,6 +153,26 @@ function ibepLogoUrl(hass) {
 function ibepIsCompactCard(cardEl, thresholdPx) {
   const w = Math.round(cardEl?.getBoundingClientRect?.().width || 0);
   return w > 0 && w <= thresholdPx;
+}
+
+function ibepStorageGet(key) {
+  try {
+    return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function ibepStorageSet(key, value) {
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(key, value);
+  } catch (_) {}
+}
+
+function ibepStorageRemove(key) {
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.removeItem(key);
+  } catch (_) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -299,7 +322,7 @@ function ibepSetupDropdown(shadow, onSelect, card) {
       e.stopPropagation();
       const val = opt.dataset.val;
       const key = dd.dataset.storageKey;
-      if (key) localStorage.setItem(key, val);
+      if (key) ibepStorageSet(key, val);
       closeDD();
       if (onSelect) onSelect(val);
     });
@@ -321,10 +344,10 @@ function ibepResolveSlug(slugs, storageKey, configDevice) {
   if (configDevice && slugs.indexOf(configDevice) !== -1) {
     return configDevice;
   }
-  let base = localStorage.getItem(storageKey);
+  let base = ibepStorageGet(storageKey);
   if (!base || slugs.indexOf(base) === -1) {
     base = slugs[0] || '';
-    if (base) localStorage.setItem(storageKey, base);
+    if (base) ibepStorageSet(storageKey, base);
   }
   return base;
 }
@@ -569,9 +592,9 @@ class IbepowerIbeplugCard extends HTMLElement {
 
   _applyHistoryPeak(base, dayStats, histStatsKey, histPeakTsKey) {
     this._historyDailyStatsByBase[base] = dayStats;
-    if (Object.keys(dayStats).length > 0) localStorage.setItem(histStatsKey, JSON.stringify(dayStats));
-    else localStorage.removeItem(histStatsKey);
-    localStorage.setItem(histPeakTsKey, String(Date.now()));
+    if (Object.keys(dayStats).length > 0) ibepStorageSet(histStatsKey, JSON.stringify(dayStats));
+    else ibepStorageRemove(histStatsKey);
+    ibepStorageSet(histPeakTsKey, String(Date.now()));
     this._peakW = this._getPeakW(base);
     this._updatePeakDisplay(base);
   }
@@ -686,11 +709,11 @@ class IbepowerIbeplugCard extends HTMLElement {
     }
     let histDayStats = {};
     try {
-      histDayStats = JSON.parse(localStorage.getItem(histStatsKey) || '{}') || {};
+      histDayStats = JSON.parse(ibepStorageGet(histStatsKey) || '{}') || {};
     } catch (e) {
       histDayStats = {};
     }
-    const histTs = Number(localStorage.getItem(histPeakTsKey)) || 0;
+    const histTs = Number(ibepStorageGet(histPeakTsKey)) || 0;
     const peakFetchTtlMs = 10 * 60 * 1000;
     const hasFreshHistCache = histTs && (nowMs - histTs) <= peakFetchTtlMs;
     if (this._historyDailyStatsByBase[base] === undefined && hasFreshHistCache) this._historyDailyStatsByBase[base] = histDayStats;
@@ -1505,21 +1528,21 @@ class IbepowerIbedivCard extends HTMLElement {
     let uiMode;
     try {
       const curMgr = managerOn ? 'on' : 'off';
-      const prevMgr = localStorage.getItem(mgrPrevKey);
+      const prevMgr = ibepStorageGet(mgrPrevKey);
       if (prevMgr !== null && prevMgr !== curMgr) {
-        localStorage.setItem(mgrToggleKey, String(Date.now()));
+        ibepStorageSet(mgrToggleKey, String(Date.now()));
       }
-      localStorage.setItem(mgrPrevKey, curMgr);
-      const toggleTs = Number(localStorage.getItem(mgrToggleKey)) || 0;
+      ibepStorageSet(mgrPrevKey, curMgr);
+      const toggleTs = Number(ibepStorageGet(mgrToggleKey)) || 0;
       const inGrace = toggleTs > 0 && (Date.now() - toggleTs) < 15000;
-      const saved = localStorage.getItem(modeKey);
+      const saved = ibepStorageGet(modeKey);
       const savedValid = saved === 'MANUAL' || saved === 'AUTO';
       if (managerOn && entityValid && !inGrace) {
         // Also check if user recently toggled mode directly
-        const modeToggleTs = Number(localStorage.getItem('ibepower_mode_toggle_ts_' + base)) || 0;
+        const modeToggleTs = Number(ibepStorageGet('ibepower_mode_toggle_ts_' + base)) || 0;
         const inModeGrace = modeToggleTs > 0 && (Date.now() - modeToggleTs) < 8000;
         if (!inModeGrace) {
-          localStorage.setItem(modeKey, modeFromEntity);
+          ibepStorageSet(modeKey, modeFromEntity);
           uiMode = modeFromEntity;
         } else if (savedValid) {
           uiMode = saved;
@@ -1987,11 +2010,9 @@ class IbepowerIbedivCard extends HTMLElement {
       if (!mEid || !mObj) return;
       const currentUiMode = this._resolveUiMode(base, true, mObj);
       const target = currentUiMode === 'MANUAL' ? 'AUTO' : 'MANUAL';
-      try {
-        localStorage.setItem('ibepower_ui_mode_' + base, target);
-        localStorage.setItem('ibepower_mgr_toggle_ts_' + base, '0');
-        localStorage.setItem('ibepower_mode_toggle_ts_' + base, String(Date.now()));
-      } catch(e) {}
+      ibepStorageSet('ibepower_ui_mode_' + base, target);
+      ibepStorageSet('ibepower_mgr_toggle_ts_' + base, '0');
+      ibepStorageSet('ibepower_mode_toggle_ts_' + base, String(Date.now()));
       const opts = mObj.attributes?.options || [];
       const match = opts.find(o => o.toUpperCase() === target);
       if (match) h.callService('select', 'select_option', { entity_id: mEid, option: match });
@@ -2166,7 +2187,7 @@ if (!customElements.get('ibepower-card-editor')) {
   customElements.define('ibepower-card-editor', IbepowerCardEditor);
 }
 
-window.customCards = window.customCards || [];
+window.customCards = Array.isArray(window.customCards) ? window.customCards : [];
 
 const IBEP_PICKER_LANG = (() => {
   const raw = String((typeof navigator !== 'undefined' && navigator.language) || 'en').toLowerCase();
@@ -2204,7 +2225,13 @@ const IBEP_PICKER_I18N = {
 
 const ibepPickerText = IBEP_PICKER_I18N[IBEP_PICKER_LANG] || IBEP_PICKER_I18N.en;
 
-window.customCards.push(
+function ibepUpsertCustomCard(cardDef) {
+  const idx = window.customCards.findIndex(card => card?.type === cardDef.type);
+  if (idx === -1) window.customCards.push(cardDef);
+  else window.customCards[idx] = { ...window.customCards[idx], ...cardDef };
+}
+
+[
   {
     type: 'ibepower-ibeplug-card',
     name: ibepPickerText.ibeplug_name,
@@ -2225,8 +2252,8 @@ window.customCards.push(
     description: ibepPickerText.ibemeter_desc,
     preview: true,
     documentationURL: 'https://github.com/Ibepower/Ibepower-Homeassistant-Integration',
-  }
-);
+  },
+].forEach(ibepUpsertCustomCard);
 
 console.info(`%c IBEPOWER CARDS %c v${IBEP_CARD_VERSION} `, 'background:#2e7d32;color:#fff;font-weight:700;', 'background:#1b5e20;color:#4cdf6b;font-weight:700;');
 
@@ -2241,7 +2268,9 @@ console.info(`%c IBEPOWER CARDS %c v${IBEP_CARD_VERSION} `, 'background:#2e7d32;
 //   2. Cap total rebuilds to avoid infinite loops on mobile.
 //   3. A few timed sweeps + a short-lived MutationObserver.
 // ---------------------------------------------------------------------------
-(function () {
+if (!IBEP_GLOBAL.selfHealerStarted) {
+  IBEP_GLOBAL.selfHealerStarted = true;
+  (function () {
   const IBEP_TAGS = [
     'ibepower-ibeplug-card',
     'ibepower-ibemeter-card',
@@ -2354,4 +2383,5 @@ console.info(`%c IBEPOWER CARDS %c v${IBEP_CARD_VERSION} `, 'background:#2e7d32;
     // refresh is needed anyway
     setTimeout(() => { observer.disconnect(); }, 30000);
   });
-})();
+  })();
+}

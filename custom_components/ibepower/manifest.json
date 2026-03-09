@@ -3,7 +3,7 @@
   "name": "Ibepower Technologies S.L.",
   "codeowners": ["@Ibepower"],
   "config_flow": true,
-  "dependencies": ["frontend"],
+  "dependencies": ["frontend", "lovelace"],
   "documentation": "https://github.com/Ibepower/Ibepower-Homeassistant-Integration",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/Ibepower/Ibepower-Homeassistant-Integration/issues",
