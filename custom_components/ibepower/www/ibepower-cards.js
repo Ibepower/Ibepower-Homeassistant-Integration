@@ -2235,6 +2235,11 @@ console.info(`%c IBEPOWER CARDS %c v${IBEP_CARD_VERSION} `, 'background:#2e7d32;
 // loading, HA shows hui-error-card. Once our elements are registered we
 // walk the shadow DOM and dispatch "ll-rebuild" so HA retries them
 // automatically — no manual F5 needed.
+//
+// Strategy:
+//   1. Only rebuild error cards that reference an ibepower card type.
+//   2. Cap total rebuilds to avoid infinite loops on mobile.
+//   3. A few timed sweeps + a short-lived MutationObserver.
 // ---------------------------------------------------------------------------
 (function () {
   const IBEP_TAGS = [
@@ -2243,19 +2248,110 @@ console.info(`%c IBEPOWER CARDS %c v${IBEP_CARD_VERSION} `, 'background:#2e7d32;
     'ibepower-ibediv-card',
   ];
 
-  function ibepRebuildErrors(root) {
-    if (!root) return;
-    root.querySelectorAll('hui-error-card').forEach(el => {
-      el.dispatchEvent(new Event('ll-rebuild', { bubbles: true, composed: true }));
-    });
-    root.querySelectorAll('*').forEach(el => {
-      if (el.shadowRoot) ibepRebuildErrors(el.shadowRoot);
+  const MAX_REBUILDS = 12;        // absolute cap across all sweeps + observer
+  let totalRebuilds = 0;
+  const _rebuilt = new WeakSet();  // avoid hitting the same DOM node twice
+
+  /**
+   * Check whether a hui-error-card is actually about one of our card types.
+   * HA stores the original card config inside the error element.
+   */
+  function isIbepowerError(el) {
+    try {
+      // 1. Check the element's own config object (HA >= 2023.x)
+      const cfg = el._config || el.config;
+      if (cfg && typeof cfg === 'object') {
+        const t = String(cfg.type || cfg.card?.type || '').toLowerCase();
+        if (IBEP_TAGS.some(tag => t.includes(tag))) return true;
+      }
+      // 2. Fallback: inspect rendered text inside the error card
+      const txt = (
+        (el.shadowRoot ? el.shadowRoot.textContent : '') + ' ' + (el.textContent || '')
+      ).toLowerCase();
+      return IBEP_TAGS.some(tag => txt.includes(tag));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function rebuildEl(el) {
+    if (_rebuilt.has(el) || totalRebuilds >= MAX_REBUILDS) return;
+    if (!isIbepowerError(el)) return;
+    _rebuilt.add(el);
+    totalRebuilds++;
+    el.dispatchEvent(new Event('ll-rebuild', { bubbles: true, composed: true }));
+  }
+
+  /**
+   * Walk the shadow-DOM tree looking for hui-error-card, but limit depth
+   * to avoid an expensive full-tree traversal on mobile.
+   */
+  function walkErrors(root, depth) {
+    if (!root || depth <= 0 || totalRebuilds >= MAX_REBUILDS) return;
+    const errors = root.querySelectorAll
+      ? root.querySelectorAll('hui-error-card')
+      : [];
+    errors.forEach(rebuildEl);
+    // Only descend into elements likely to host HA cards
+    const containers = root.querySelectorAll
+      ? root.querySelectorAll(
+          'home-assistant, ha-panel-lovelace, hui-root, hui-view, ' +
+          'hui-masonry-view, hui-sections-view, hui-panel-view, ' +
+          'hui-grid-card, hui-stack-card, hui-card, hui-error-card, ' +
+          'horizontal-stack-card, vertical-stack-card, grid'
+        )
+      : [];
+    containers.forEach(el => {
+      if (el.shadowRoot) walkErrors(el.shadowRoot, depth - 1);
     });
   }
 
+  // --- 1. Timed sweeps (5 attempts with increasing delay) ---
   Promise.all(IBEP_TAGS.map(t => customElements.whenDefined(t))).then(() => {
-    requestAnimationFrame(() => {
-      setTimeout(() => ibepRebuildErrors(document.documentElement), 500);
+    [0, 300, 1000, 3000, 8000].forEach(ms => {
+      setTimeout(() => {
+        if (totalRebuilds >= MAX_REBUILDS) return;
+        walkErrors(document, 20);
+        // Also try from the main HA root (companion app / shadow DOM)
+        const haMain = document.querySelector('home-assistant');
+        if (haMain?.shadowRoot) walkErrors(haMain.shadowRoot, 20);
+      }, ms);
     });
+  });
+
+  // --- 2. Short-lived MutationObserver (only on the top HA containers) ---
+  Promise.all(IBEP_TAGS.map(t => customElements.whenDefined(t))).then(() => {
+    let observer;
+    let debounceTimer;
+    const seen = new WeakSet();
+
+    observer = new MutationObserver((mutations) => {
+      if (totalRebuilds >= MAX_REBUILDS) { observer.disconnect(); return; }
+      // Debounce: batch rapid mutations into one pass
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        for (const m of mutations) {
+          for (const node of m.addedNodes) {
+            if (!(node instanceof HTMLElement)) continue;
+            if (node.localName === 'hui-error-card' && !seen.has(node)) {
+              seen.add(node);
+              // Small delay so HA finishes rendering the error card's config
+              setTimeout(() => rebuildEl(node), 150);
+            }
+          }
+        }
+      }, 80);
+    });
+
+    observer.observe(document, { childList: true, subtree: true });
+    // Also observe the main HA shadow root if present
+    const haMain = document.querySelector('home-assistant');
+    if (haMain?.shadowRoot) {
+      observer.observe(haMain.shadowRoot, { childList: true, subtree: true });
+    }
+
+    // Disconnect after 30 s — if cards haven't recovered by then, a manual
+    // refresh is needed anyway
+    setTimeout(() => { observer.disconnect(); }, 30000);
   });
 })();
